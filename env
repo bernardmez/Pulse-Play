@@ -1,0 +1,16 @@
+# Database Configuration
+DB_HOST=database
+DB_USER=pulseplay_user
+DB_PASSWORD=pulseplay_pass_2024
+DB_NAME=pulse_play
+DB_PORT=3306
+MYSQL_ROOT_PASSWORD=pulseplay_root_2024
+
+# Backend Configuration
+BACKEND_PORT=5000
+NODE_ENV=production
+JWT_SECRET=your_super_secret_jwt_key_change_this_in_production
+
+# Frontend Configuration
+FRONTEND_PORT=3000
+REACT_APP_API_URL=http://localhost:5000
