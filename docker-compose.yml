@@ -1,65 +1,81 @@
 version: '3.8'
 
 services:
-  # Database Service
   database:
-    image: mariadb:12.0
+    image: mariadb:11.4
     container_name: pulseplay-database
-    restart: always
+    restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: pulseplay_root_2024
-      MYSQL_DATABASE: pulse_play
-      MYSQL_USER: pulseplay_user
-      MYSQL_PASSWORD: pulseplay_pass_2024
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?required}
+      MYSQL_DATABASE: ${DB_NAME:?required}
+      MYSQL_USER: ${DB_USER:?required}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?required}
     ports:
       - "3306:3306"
     volumes:
       - db_data:/var/lib/mysql
     networks:
       - pulseplay-network
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # Backend Service  
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: pulseplay-backend
-    restart: always
+    restart: unless-stopped
     environment:
-      NODE_ENV: production
-      PORT: 5000
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: ${PORT:-5000}
       DB_HOST: database
-      DB_USER: pulseplay_user
-      DB_PASSWORD: pulseplay_pass_2024
-      DB_NAME: pulse_play
-      DB_PORT: 3306
-      JWT_SECRET: your_super_secret_jwt_key_change_in_production
+      DB_PORT: ${DB_PORT:-3306}
+      DB_USER: ${DB_USER:?required}
+      DB_PASSWORD: ${DB_PASSWORD:?required}
+      DB_NAME: ${DB_NAME:?required}
+      JWT_SECRET: ${JWT_SECRET:?required}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
     ports:
-      - "5000:5000"
+      - "${PORT:-5000}:${PORT:-5000}"
     depends_on:
-      - database
+      database:
+        condition: service_healthy
     networks:
       - pulseplay-network
-    # Don't mount node_modules from host - let Docker build handle it
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:${PORT:-5000}/health | grep -q healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
-  # Frontend Service
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:5000}
     container_name: pulseplay-frontend
-    restart: always
-    environment:
-      REACT_APP_API_URL: http://localhost:5000
+    restart: unless-stopped
     ports:
       - "3000:3000"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - pulseplay-network
-    # Don't mount node_modules from host - let Docker build handle it
-    stdin_open: true
-    tty: true
+    mem_limit: 64m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/ | grep -q html"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
 
 networks:
   pulseplay-network:

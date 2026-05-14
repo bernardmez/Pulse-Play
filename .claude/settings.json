@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(if \\($?\\) { \"Migrations folder exists\" } else { \"No migrations folder found\" })",
+      "PowerShell(ls \"c:\\\\Users\\\\jp7\\\\Downloads\\\\Pulse-Play\" | Where-Object {-not $_.Name.startswith\\('.'\\)} | Select-Object Name, @{N=\"Type\"; E={if\\($_.PSIsContainer\\){\"DIR\"}else{\"FILE\"}}} | Format-Table -AutoSize)",
+      "Bash(node -e ' *)",
+      "Bash(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\jp7\\\\Downloads\\\\Pulse-Play\\\\database\")",
+      "Bash(Out-Null)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
+    ]
+  }
+}

@@ -143,6 +143,8 @@ function App() {
     );
   };
 
+  const [selectedGenre, setSelectedGenre] = useState(null);
+
   const viewArtist = (artist) => {
     setSelectedArtist(artist);
     setCurrentView('artist');
@@ -156,6 +158,11 @@ function App() {
   const viewPlaylist = (playlist) => {
     setSelectedPlaylist(playlist);
     setCurrentView('playlist-detail');
+  };
+
+  const viewGenre = (genre) => {
+    setSelectedGenre(genre);
+    setCurrentView('genre');
   };
 
   return (
@@ -177,13 +184,23 @@ function App() {
 
         <div className="content-area">
           {currentView === 'home' && (
-            <HomeView 
-              playSong={playSong} 
+            <HomeView
+              playSong={playSong}
               isAuthenticated={isAuthenticated}
               viewArtist={viewArtist}
               viewAlbum={viewAlbum}
+              viewGenre={viewGenre}
               currentUser={currentUser}
               showNotification={showNotification}
+            />
+          )}
+          {currentView === 'genre' && selectedGenre && (
+            <GenreView
+              genre={selectedGenre}
+              playSong={playSong}
+              currentUser={currentUser}
+              showNotification={showNotification}
+              onBack={() => setCurrentView('home')}
             />
           )}
           {currentView === 'search' && (
@@ -514,7 +531,7 @@ function Header({ isAuthenticated, currentUser, onAuthClick }) {
 // HOME VIEW
 // ============================================================================
 
-function HomeView({ playSong, isAuthenticated, viewArtist, viewAlbum, currentUser, showNotification }) {
+function HomeView({ playSong, isAuthenticated, viewArtist, viewAlbum, viewGenre, currentUser, showNotification }) {
   const [trendingSongs, setTrendingSongs] = useState([]);
   const [artists, setArtists] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -526,8 +543,8 @@ function HomeView({ playSong, isAuthenticated, viewArtist, viewAlbum, currentUse
   const fetchHomeData = async () => {
     try {
       const [songsRes, artistsRes] = await Promise.all([
-        fetch('http://localhost:5000/api/songs/trending/all'),
-        fetch('http://localhost:5000/api/artists')
+        fetch('/api/songs/trending/all'),
+        fetch('/api/artists')
       ]);
       
       const songsData = await songsRes.json();
@@ -617,12 +634,13 @@ function HomeView({ playSong, isAuthenticated, viewArtist, viewAlbum, currentUse
           <h2>Browse by Genre</h2>
         </div>
         <div className="genres-grid">
-          <GenreCard genre="Pop" color="#E91E63" />
-          <GenreCard genre="Rock" color="#D32F2F" />
-          <GenreCard genre="Hip-Hop" color="#7B1FA2" />
-          <GenreCard genre="Electronic" color="#00BCD4" />
-          <GenreCard genre="Jazz" color="#FF9800" />
-          <GenreCard genre="Classical" color="#5E35B1" />
+          <GenreCard genre="Pop"        color="#E91E63" onClick={() => viewGenre('Pop')} />
+          <GenreCard genre="Rock"       color="#D32F2F" onClick={() => viewGenre('Rock')} />
+          <GenreCard genre="Hip-Hop"    color="#7B1FA2" onClick={() => viewGenre('Hip-Hop')} />
+          <GenreCard genre="Electronic" color="#00BCD4" onClick={() => viewGenre('Electronic')} />
+          <GenreCard genre="Jazz"       color="#FF9800" onClick={() => viewGenre('Jazz')} />
+          <GenreCard genre="Indie Rock" color="#5E35B1" onClick={() => viewGenre('Indie Rock')} />
+          <GenreCard genre="Synthwave"  color="#00D4FF" onClick={() => viewGenre('Synthwave')} />
         </div>
       </section>
     </div>
@@ -645,7 +663,7 @@ function SearchView({ playSong, viewArtist, currentUser, showNotification }) {
 
     setSearching(true);
     try {
-      const response = await fetch(`http://localhost:5000/api/songs/search/${query}`);
+      const response = await fetch(`/api/songs/search/${query}`);
       const data = await response.json();
       setSearchResults(data);
     } catch (error) {
@@ -714,10 +732,14 @@ function SearchView({ playSong, viewArtist, currentUser, showNotification }) {
           <div className="search-suggestions">
             <h2>Try searching for:</h2>
             <div className="suggestion-tags">
-              <button className="tag" onClick={() => setSearchQuery('pop')}>Pop Music</button>
-              <button className="tag" onClick={() => setSearchQuery('rock')}>Rock Classics</button>
-              <button className="tag" onClick={() => setSearchQuery('jazz')}>Jazz</button>
-              <button className="tag" onClick={() => setSearchQuery('electronic')}>Electronic</button>
+              <button className="tag" onClick={() => setSearchQuery('Pop')}>Pop</button>
+              <button className="tag" onClick={() => setSearchQuery('Rock')}>Rock</button>
+              <button className="tag" onClick={() => setSearchQuery('Hip-Hop')}>Hip-Hop</button>
+              <button className="tag" onClick={() => setSearchQuery('Electronic')}>Electronic</button>
+              <button className="tag" onClick={() => setSearchQuery('Jazz')}>Jazz</button>
+              <button className="tag" onClick={() => setSearchQuery('Synthwave')}>Synthwave</button>
+              <button className="tag" onClick={() => setSearchQuery('Drake')}>Drake</button>
+              <button className="tag" onClick={() => setSearchQuery('Queen')}>Queen</button>
             </div>
           </div>
         )}
@@ -745,13 +767,19 @@ function LibraryView({ currentUser, playSong, viewPlaylist, showNotification }) 
     
     try {
       const playlistsRes = await fetch(
-        `http://localhost:5000/api/playlists/user/${currentUser.userId}`,
+        `/api/playlists/user/${currentUser.userId}`,
         { headers: { 'Authorization': `Bearer ${token}` } }
       );
       const playlistsData = await playlistsRes.json();
-      setPlaylists(playlistsData);
+      if (!playlistsRes.ok) {
+        console.error('Playlists error:', playlistsData);
+        setPlaylists([]);
+        return;
+      }
+      setPlaylists(Array.isArray(playlistsData) ? playlistsData : []);
     } catch (error) {
       console.error('Error fetching playlists:', error);
+      setPlaylists([]);
     }
   };
 
@@ -759,7 +787,7 @@ function LibraryView({ currentUser, playSong, viewPlaylist, showNotification }) 
     const token = localStorage.getItem('token');
     
     try {
-      const response = await fetch('http://localhost:5000/api/playlists', {
+      const response = await fetch('/api/playlists', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -783,7 +811,7 @@ function LibraryView({ currentUser, playSong, viewPlaylist, showNotification }) 
     const token = localStorage.getItem('token');
     
     try {
-      const response = await fetch(`http://localhost:5000/api/playlists/${playlistId}`, {
+      const response = await fetch(`/api/playlists/${playlistId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -809,7 +837,7 @@ function LibraryView({ currentUser, playSong, viewPlaylist, showNotification }) 
     const token = localStorage.getItem('token');
     
     try {
-      const response = await fetch(`http://localhost:5000/api/playlists/${playlistId}`, {
+      const response = await fetch(`/api/playlists/${playlistId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -884,11 +912,12 @@ function FavoritesView({ currentUser, playSong, showNotification }) {
     
     try {
       const response = await fetch(
-        `http://localhost:5000/api/favorites/${currentUser.userId}`,
+        `/api/favorites/${currentUser.userId}`,
         { headers: { 'Authorization': `Bearer ${token}` } }
       );
       const data = await response.json();
-      setFavorites(data);
+      if (!response.ok) { setFavorites([]); setLoading(false); return; }
+      setFavorites(Array.isArray(data) ? data : []);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching favorites:', error);
@@ -949,9 +978,9 @@ function BrowseView({ playSong, viewArtist, viewAlbum, currentUser, showNotifica
   const fetchBrowseData = async () => {
     try {
       const [songsRes, artistsRes, albumsRes] = await Promise.all([
-        fetch('http://localhost:5000/api/songs'),
-        fetch('http://localhost:5000/api/artists'),
-        fetch('http://localhost:5000/api/albums')
+        fetch('/api/songs'),
+        fetch('/api/artists'),
+        fetch('/api/albums')
       ]);
 
       const songsData = await songsRes.json();
@@ -1062,7 +1091,7 @@ function ArtistView({ artist, playSong, viewAlbum, currentUser, showNotification
 
   const fetchArtistDetails = async () => {
     try {
-      const response = await fetch(`http://localhost:5000/api/artists/${artist.artist_id}`);
+      const response = await fetch(`/api/artists/${artist.artist_id}`);
       const data = await response.json();
       setArtistDetails(data);
       setLoading(false);
@@ -1078,7 +1107,7 @@ function ArtistView({ artist, playSong, viewAlbum, currentUser, showNotification
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/following/${currentUser.userId}`,
+        `/api/following/${currentUser.userId}`,
         { headers: { 'Authorization': `Bearer ${token}` } }
       );
       const following = await response.json();
@@ -1098,14 +1127,14 @@ function ArtistView({ artist, playSong, viewAlbum, currentUser, showNotification
     
     try {
       if (isFollowing) {
-        await fetch(`http://localhost:5000/api/follow-artist/${artist.artist_id}`, {
+        await fetch(`/api/follow-artist/${artist.artist_id}`, {
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${token}` }
         });
         setIsFollowing(false);
         showNotification('Unfollowed artist');
       } else {
-        await fetch('http://localhost:5000/api/follow-artist', {
+        await fetch('/api/follow-artist', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1217,7 +1246,7 @@ function AlbumView({ album, playSong, currentUser, showNotification }) {
 
   const fetchAlbumDetails = async () => {
     try {
-      const response = await fetch(`http://localhost:5000/api/albums/${album.album_id}`);
+      const response = await fetch(`/api/albums/${album.album_id}`);
       const data = await response.json();
       setAlbumDetails(data);
       setLoading(false);
@@ -1283,7 +1312,7 @@ function PlaylistDetailView({ playlist, playSong, currentUser, showNotification,
 
   const fetchPlaylistDetails = async () => {
     try {
-      const response = await fetch(`http://localhost:5000/api/queries/playlist-details/${playlist.playlist_id}`);
+      const response = await fetch(`/api/queries/playlist-details/${playlist.playlist_id}`);
       const data = await response.json();
       setPlaylistDetails(data);
       setLoading(false);
@@ -1300,7 +1329,7 @@ function PlaylistDetailView({ playlist, playSong, currentUser, showNotification,
     
     try {
       const response = await fetch(
-        `http://localhost:5000/api/playlists/${playlist.playlist_id}/songs/${songId}`,
+        `/api/playlists/${playlist.playlist_id}/songs/${songId}`,
         {
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${token}` }
@@ -1543,7 +1572,7 @@ function LikeButton({ songId, currentUser, showNotification, onUpdate }) {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/favorites/${currentUser.userId}`,
+        `/api/favorites/${currentUser.userId}`,
         { headers: { 'Authorization': `Bearer ${token}` } }
       );
       const favorites = await response.json();
@@ -1567,14 +1596,14 @@ function LikeButton({ songId, currentUser, showNotification, onUpdate }) {
     
     try {
       if (isLiked) {
-        await fetch(`http://localhost:5000/api/favorites/${songId}`, {
+        await fetch(`/api/favorites/${songId}`, {
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${token}` }
         });
         setIsLiked(false);
         showNotification('Removed from liked songs');
       } else {
-        await fetch('http://localhost:5000/api/favorites', {
+        await fetch('/api/favorites', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1620,7 +1649,7 @@ function AddToPlaylistModal({ songId, currentUser, onClose, showNotification }) 
     
     try {
       const response = await fetch(
-        `http://localhost:5000/api/playlists/user/${currentUser.userId}`,
+        `/api/playlists/user/${currentUser.userId}`,
         { headers: { 'Authorization': `Bearer ${token}` } }
       );
       const data = await response.json();
@@ -1637,7 +1666,7 @@ function AddToPlaylistModal({ songId, currentUser, onClose, showNotification }) 
     
     try {
       const response = await fetch(
-        `http://localhost:5000/api/playlists/${playlistId}/songs`,
+        `/api/playlists/${playlistId}/songs`,
         {
           method: 'POST',
           headers: {
@@ -1706,9 +1735,9 @@ function AddToPlaylistModal({ songId, currentUser, onClose, showNotification }) 
   );
 }
 
-function GenreCard({ genre, color }) {
+function GenreCard({ genre, color, onClick }) {
   return (
-    <div className="genre-card" style={{ background: `linear-gradient(135deg, ${color}, ${color}dd)` }}>
+    <div className="genre-card" style={{ background: `linear-gradient(135deg, ${color}, ${color}dd)` }} onClick={onClick}>
       <h3>{genre}</h3>
       <div className="genre-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1880,7 +1909,7 @@ function Player({ song, isPlaying, setIsPlaying, currentUser, onNext, onPrevious
     if (!token) return;
 
     try {
-      await fetch('http://localhost:5000/api/listening-history', {
+      await fetch('/api/listening-history', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1939,7 +1968,14 @@ function Player({ song, isPlaying, setIsPlaying, currentUser, onNext, onPrevious
           <h4>{song.title}</h4>
           <p>{song.artist_name}</p>
         </div>
-        <LikeButton 
+        {isPlaying && (
+          <div className="waveform">
+            {[1,2,3,4,5].map(i => (
+              <div key={i} className={`waveform-bar bar-${i}`}></div>
+            ))}
+          </div>
+        )}
+        <LikeButton
           songId={song.song_id}
           currentUser={currentUser}
           showNotification={() => {}}
@@ -2220,7 +2256,7 @@ function AuthModal({ onClose, onLogin }) {
 
     try {
       const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
-      const response = await fetch(`http://localhost:5000${endpoint}`, {
+      const response = await fetch(`${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
@@ -2325,6 +2361,76 @@ function AuthModal({ onClose, onLogin }) {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// GENRE VIEW
+// ============================================================================
+
+function GenreView({ genre, playSong, currentUser, showNotification, onBack }) {
+  const [songs, setSongs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchGenreSongs = async () => {
+      try {
+        const response = await fetch(`/api/songs?genre=${encodeURIComponent(genre)}&limit=50`);
+        const data = await response.json();
+        setSongs(Array.isArray(data.songs) ? data.songs : []);
+      } catch (error) {
+        console.error('Error fetching genre songs:', error);
+        setSongs([]);
+      }
+      setLoading(false);
+    };
+    fetchGenreSongs();
+  }, [genre]);
+
+  return (
+    <div className="genre-view">
+      <div style={{ marginBottom: '1.5rem' }}>
+        <button
+          onClick={onBack}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '0.5rem',
+            color: 'var(--primary)', fontWeight: 700, fontSize: '0.9rem',
+            background: 'none', border: 'none', cursor: 'pointer',
+            marginBottom: '1rem', fontFamily: 'var(--font-mono)'
+          }}
+        >
+          ← Back to Home
+        </button>
+        <h1 style={{ fontSize: '2.5rem', fontWeight: 900 }}>{genre}</h1>
+        <p style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', marginTop: '0.25rem' }}>
+          {loading ? '...' : `${songs.length} songs`}
+        </p>
+      </div>
+
+      {loading ? (
+        <div className="loading-state">
+          <div className="spinner"></div>
+          <p>Loading {genre} songs...</p>
+        </div>
+      ) : songs.length > 0 ? (
+        <div className="songs-list">
+          {songs.map((song) => (
+            <SongRow
+              key={song.song_id}
+              song={song}
+              onPlay={() => playSong(song, songs)}
+              currentUser={currentUser}
+              showNotification={showNotification}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="empty-state">
+          <p>No {genre} songs found</p>
+          <p className="empty-subtitle">Try a different genre</p>
+        </div>
+      )}
     </div>
   );
 }
