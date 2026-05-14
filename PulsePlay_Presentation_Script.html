@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pulse Play — Presentation Script</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --cyan: #00D4FF;
+    --purple: #8B5CF6;
+    --pink: #FF0080;
+    --dark: #030711;
+    --card: #07101F;
+    --border: rgba(0,212,255,0.15);
+    --text: #EDF2F7;
+    --muted: #8BAFD4;
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--dark);
+    color: var(--text);
+    line-height: 1.7;
+    font-size: 13px;
+  }
+
+  /* ── PRINT ── */
+  @media print {
+    body { background: #fff; color: #111; font-size: 11px; }
+    .cover { background: #0a0a1a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .member-block { page-break-inside: avoid; }
+    .part-header { page-break-before: always; }
+    .part-header:first-of-type { page-break-before: avoid; }
+    pre { background: #f4f4f4 !important; color: #111 !important; border: 1px solid #ccc !important; }
+    .say { background: #f0f8ff !important; border-left-color: #0066cc !important; color: #111 !important; }
+    .step-box { background: #f9f9f9 !important; border-color: #ccc !important; }
+    .tag-cyan { color: #0066cc !important; }
+    .tag-purple { color: #6600cc !important; }
+    .tag-pink { color: #cc0066 !important; }
+    .badge { background: #eee !important; color: #111 !important; border: 1px solid #ccc !important; }
+    .toc-link { color: #0066cc !important; }
+    a { color: inherit; text-decoration: none; }
+  }
+
+  /* ── COVER ── */
+  .cover {
+    background: linear-gradient(160deg, #030711 0%, #07101F 50%, #0C1A2E 100%);
+    padding: 80px 60px;
+    text-align: center;
+    border-bottom: 2px solid var(--cyan);
+    position: relative;
+    overflow: hidden;
+  }
+  .cover::before {
+    content: '';
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse at top right, rgba(0,212,255,0.08) 0%, transparent 60%),
+      radial-gradient(ellipse at bottom left, rgba(139,92,246,0.06) 0%, transparent 60%);
+  }
+  .cover-logo {
+    font-size: 52px; font-weight: 800; letter-spacing: -2px;
+    background: linear-gradient(135deg, #00D4FF, #00FF9F);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 8px; position: relative;
+  }
+  .cover-sub {
+    font-size: 16px; color: var(--muted); margin-bottom: 40px;
+    position: relative;
+  }
+  .cover-divider {
+    width: 80px; height: 2px;
+    background: linear-gradient(90deg, var(--cyan), var(--purple));
+    margin: 0 auto 36px;
+  }
+  .cover-team {
+    display: flex; justify-content: center; gap: 24px;
+    flex-wrap: wrap; margin-bottom: 32px; position: relative;
+  }
+  .cover-member {
+    background: rgba(0,212,255,0.06);
+    border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 22px;
+    min-width: 160px;
+  }
+  .cover-member .name { font-weight: 700; font-size: 13px; color: var(--text); }
+  .cover-member .role { font-size: 11px; color: var(--cyan); font-family: 'Fira Code', monospace; margin-top: 3px; }
+  .cover-meta {
+    font-size: 12px; color: var(--muted); position: relative;
+    font-family: 'Fira Code', monospace; letter-spacing: 0.5px;
+  }
+
+  /* ── LAYOUT ── */
+  .container { max-width: 900px; margin: 0 auto; padding: 40px 40px 80px; }
+
+  /* ── TOC ── */
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px; padding: 28px 32px;
+    margin-bottom: 48px;
+  }
+  .toc h2 { font-size: 14px; color: var(--cyan); font-family: 'Fira Code', monospace; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 20px; }
+  .toc-table { width: 100%; border-collapse: collapse; }
+  .toc-table th { font-size: 11px; color: var(--muted); text-align: left; padding: 6px 12px; border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: 1px; }
+  .toc-table td { padding: 8px 12px; font-size: 12px; border-bottom: 1px solid rgba(0,212,255,0.05); }
+  .toc-table tr:last-child td { border-bottom: none; }
+  .toc-link { color: var(--cyan); font-weight: 600; }
+  .time-badge { background: rgba(0,212,255,0.1); color: var(--cyan); padding: 2px 8px; border-radius: 20px; font-size: 11px; font-family: 'Fira Code', monospace; }
+
+  /* ── PART HEADER ── */
+  .part-header {
+    margin-bottom: 36px; padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .part-label {
+    font-size: 11px; font-family: 'Fira Code', monospace;
+    color: var(--cyan); text-transform: uppercase; letter-spacing: 2px;
+    margin-bottom: 8px;
+  }
+  .part-title {
+    font-size: 28px; font-weight: 800; letter-spacing: -0.5px;
+  }
+  .part-meta {
+    display: flex; gap: 12px; margin-top: 10px; flex-wrap: wrap;
+  }
+  .badge {
+    padding: 3px 12px; border-radius: 20px; font-size: 11px; font-weight: 700;
+    font-family: 'Fira Code', monospace;
+  }
+  .badge-cyan  { background: rgba(0,212,255,0.12);  color: var(--cyan);   border: 1px solid rgba(0,212,255,0.2); }
+  .badge-purple{ background: rgba(139,92,246,0.12); color: var(--purple); border: 1px solid rgba(139,92,246,0.2); }
+  .badge-pink  { background: rgba(255,0,128,0.12);  color: var(--pink);   border: 1px solid rgba(255,0,128,0.2); }
+  .badge-green { background: rgba(0,255,159,0.12);  color: #00FF9F;       border: 1px solid rgba(0,255,159,0.2); }
+
+  /* ── SLIDE BLOCK ── */
+  .slide-block {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    margin-bottom: 28px;
+    overflow: hidden;
+  }
+  .slide-header {
+    padding: 14px 22px;
+    background: rgba(0,212,255,0.05);
+    border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .slide-title { font-size: 13px; font-weight: 800; color: var(--text); }
+  .slide-time  { font-size: 11px; color: var(--muted); font-family: 'Fira Code', monospace; }
+  .slide-body  { padding: 20px 22px; }
+
+  pre {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(0,212,255,0.08);
+    border-radius: 10px;
+    padding: 16px 20px;
+    font-family: 'Fira Code', monospace;
+    font-size: 11.5px;
+    line-height: 1.8;
+    overflow-x: auto;
+    color: #B8D4E8;
+    margin-bottom: 16px;
+  }
+
+  /* ── SAY BOX ── */
+  .say {
+    background: rgba(0,212,255,0.04);
+    border-left: 3px solid var(--cyan);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    font-size: 12.5px;
+    font-style: italic;
+    color: var(--muted);
+    margin-top: 12px;
+  }
+  .say strong { color: var(--text); font-style: normal; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 6px; font-family: 'Fira Code', monospace; }
+
+  /* ── DEMO BLOCK ── */
+  .demo-block {
+    border: 1px solid rgba(0,255,159,0.2);
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 28px;
+  }
+  .demo-header {
+    background: rgba(0,255,159,0.06);
+    border-bottom: 1px solid rgba(0,255,159,0.15);
+    padding: 14px 22px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .demo-title { font-size: 13px; font-weight: 800; color: #00FF9F; }
+  .demo-body  { padding: 20px 22px; }
+
+  /* ── STEP ── */
+  .step-box {
+    background: rgba(0,0,0,0.25);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 14px;
+  }
+  .step-num {
+    font-size: 10px; font-family: 'Fira Code', monospace;
+    color: var(--cyan); text-transform: uppercase; letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+  .step-action {
+    font-size: 12px; color: var(--text); margin-bottom: 8px; font-weight: 500;
+  }
+  .step-action li { margin-left: 16px; margin-bottom: 3px; }
+
+  code {
+    background: rgba(0,212,255,0.1);
+    color: var(--cyan);
+    padding: 1px 6px; border-radius: 4px;
+    font-family: 'Fira Code', monospace; font-size: 11px;
+  }
+
+  /* ── TABLE ── */
+  .data-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+  .data-table th {
+    background: rgba(0,212,255,0.08);
+    padding: 8px 14px; text-align: left;
+    font-size: 11px; color: var(--cyan);
+    text-transform: uppercase; letter-spacing: 1px;
+    border-bottom: 1px solid var(--border);
+  }
+  .data-table td {
+    padding: 8px 14px; font-size: 12px;
+    border-bottom: 1px solid rgba(0,212,255,0.05);
+    vertical-align: top;
+  }
+  .data-table tr:last-child td { border-bottom: none; }
+
+  /* ── TAGS ── */
+  .tag-cyan   { color: var(--cyan); font-weight: 700; }
+  .tag-purple { color: var(--purple); font-weight: 700; }
+  .tag-pink   { color: var(--pink); font-weight: 700; }
+  .tag-green  { color: #00FF9F; font-weight: 700; }
+
+  /* ── TIPS BOX ── */
+  .tips-box {
+    background: rgba(255,0,128,0.05);
+    border: 1px solid rgba(255,0,128,0.2);
+    border-radius: 14px; padding: 22px 26px;
+    margin-bottom: 28px;
+  }
+  .tips-box h3 { color: var(--pink); font-size: 13px; margin-bottom: 14px; font-family: 'Fira Code', monospace; text-transform: uppercase; letter-spacing: 1px; }
+  .tips-box li { margin-left: 18px; margin-bottom: 6px; font-size: 12px; }
+
+  /* ── QA TABLE ── */
+  .qa-table { width: 100%; border-collapse: collapse; }
+  .qa-table th {
+    background: rgba(139,92,246,0.1);
+    padding: 8px 14px; text-align: left;
+    font-size: 11px; color: var(--purple);
+    text-transform: uppercase; letter-spacing: 1px;
+    border-bottom: 1px solid rgba(139,92,246,0.2);
+  }
+  .qa-table td {
+    padding: 9px 14px; font-size: 11.5px;
+    border-bottom: 1px solid rgba(139,92,246,0.08);
+    vertical-align: top;
+  }
+  .qa-table tr:last-child td { border-bottom: none; }
+
+  h3 { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 12px; }
+  h4 { font-size: 12px; font-weight: 700; color: var(--muted); margin: 16px 0 8px; text-transform: uppercase; letter-spacing: 0.5px; font-family: 'Fira Code', monospace; }
+  p  { font-size: 12.5px; color: var(--muted); margin-bottom: 10px; }
+  ul { list-style: disc; }
+  li { font-size: 12px; margin-left: 18px; margin-bottom: 4px; }
+
+  .section-divider {
+    display: flex; align-items: center; gap: 16px;
+    margin: 48px 0 36px;
+  }
+  .section-divider-line { flex: 1; height: 1px; background: var(--border); }
+  .section-divider-label { font-size: 11px; font-family: 'Fira Code', monospace; color: var(--muted); white-space: nowrap; }
+
+  .print-btn {
+    position: fixed; bottom: 30px; right: 30px;
+    background: linear-gradient(135deg, #00D4FF, #00FF9F);
+    color: #030711; font-weight: 800; font-size: 13px;
+    padding: 12px 24px; border-radius: 30px; border: none;
+    cursor: pointer; box-shadow: 0 0 20px rgba(0,212,255,0.4);
+    font-family: 'Inter', sans-serif; z-index: 999;
+  }
+  .print-btn:hover { opacity: 0.9; }
+  @media print { .print-btn { display: none; } }
+</style>
+</head>
+<body>
+
+<button class="print-btn" onclick="window.print()">Save as PDF</button>
+
+<!-- COVER -->
+<div class="cover">
+  <div class="cover-logo">Pulse Play</div>
+  <div class="cover-sub">Final Presentation Script — COE416 Software Engineering</div>
+  <div class="cover-divider"></div>
+  <div class="cover-team">
+    <div class="cover-member">
+      <div class="name">Habib Koussa</div>
+      <div class="role">Frontend · Process</div>
+    </div>
+    <div class="cover-member">
+      <div class="name">Hassan Ahmad</div>
+      <div class="role">Database · Challenges</div>
+    </div>
+    <div class="cover-member">
+      <div class="name">Mohamad Diab</div>
+      <div class="role">Architecture · Requirements</div>
+    </div>
+    <div class="cover-member">
+      <div class="name">Bernard Mazraani</div>
+      <div class="role">Integration · Live Demo</div>
+    </div>
+  </div>
+  <div class="cover-meta">Group 6 &nbsp;·&nbsp; Lebanese American University &nbsp;·&nbsp; Spring 2026 &nbsp;·&nbsp; May 15, 2026</div>
+</div>
+
+<div class="container">
+
+<!-- TOC -->
+<div class="toc">
+  <h2>Presentation Overview</h2>
+  <table class="toc-table">
+    <tr><th>#</th><th>Slide</th><th>Presenter</th><th>Type</th><th>Time</th></tr>
+    <tr><td>1</td><td>Title &amp; What is Pulse Play</td><td class="toc-link">Habib</td><td>Slides</td><td><span class="time-badge">1.5 min</span></td></tr>
+    <tr><td>2</td><td>Frontend UI Demo</td><td class="toc-link">Habib</td><td>Demo</td><td><span class="time-badge">2 min</span></td></tr>
+    <tr><td>3</td><td>Software Engineering Process</td><td class="toc-link">Habib</td><td>Slides</td><td><span class="time-badge">2 min</span></td></tr>
+    <tr><td>4</td><td>Database Design</td><td class="toc-link">Hassan</td><td>Slides</td><td><span class="time-badge">2 min</span></td></tr>
+    <tr><td>5</td><td>Database Live Demo</td><td class="toc-link">Hassan</td><td>Demo</td><td><span class="time-badge">2 min</span></td></tr>
+    <tr><td>6</td><td>Challenges &amp; Lessons</td><td class="toc-link">Hassan</td><td>Slides</td><td><span class="time-badge">1.5 min</span></td></tr>
+    <tr><td>7</td><td>System Architecture</td><td class="toc-link">Mohamad</td><td>Slides</td><td><span class="time-badge">2 min</span></td></tr>
+    <tr><td>8</td><td>Backend API Demo</td><td class="toc-link">Mohamad</td><td>Demo</td><td><span class="time-badge">2 min</span></td></tr>
+    <tr><td>9</td><td>Requirements Coverage</td><td class="toc-link">Mohamad</td><td>Slides</td><td><span class="time-badge">1.5 min</span></td></tr>
+    <tr><td>10</td><td>Live Demo — Full Flows</td><td class="toc-link">Bernard</td><td>Demo</td><td><span class="time-badge">5 min</span></td></tr>
+    <tr><td>11</td><td>Individual Contributions</td><td class="toc-link">All</td><td>Slides</td><td><span class="time-badge">1 min</span></td></tr>
+  </table>
+  <p style="margin-top:14px;font-size:11px;"><span class="tag-cyan">Total: ~22 minutes</span> &nbsp;·&nbsp; Each member: ~5.5 minutes</p>
+</div>
+
+<!-- ═══════════════ HABIB ═══════════════ -->
+<div class="part-header">
+  <div class="part-label">Part 1 of 4</div>
+  <div class="part-title">Habib Koussa</div>
+  <div class="part-meta">
+    <span class="badge badge-cyan">Frontend UI</span>
+    <span class="badge badge-purple">Process</span>
+    <span class="badge badge-green">~5.5 minutes</span>
+  </div>
+</div>
+
+<div class="slide-block">
+  <div class="slide-header">
+    <span class="slide-title">SLIDE 1 — Title Slide</span>
+    <span class="slide-time">30 seconds</span>
+  </div>
+  <div class="slide-body">
+    <pre>PULSE PLAY
+A Web-Based Music Streaming System
+
+Hassan Ahmad  ·  Mohamad Diab  ·  Habib Koussa  ·  Bernard Mazraani
+COE416 — Software Engineering  ·  Spring 2026  ·  Group 6
+Lebanese American University</pre>
+    <div class="say"><strong>Say:</strong> "Good morning. We are Group 6 and today we present Pulse Play — a fully functional music streaming system built from scratch this semester. I'm Habib, I'll open with what we built and close with our engineering process."</div>
+  </div>
+</div>
+
+<div class="slide-block">
+  <div class="slide-header">
+    <span class="slide-title">SLIDE 2 — What is Pulse Play?</span>
+    <span class="slide-time">1 minute</span>
+  </div>
+  <div class="slide-body">
+    <pre>The Problem
+  Users need a centralized platform to discover, stream, and organize music
+
+The Solution — Pulse Play
+  ✦ Search songs by title, artist, genre, album
+  ✦ Full playback controls — play, pause, skip, shuffle, repeat
+  ✦ Personal playlists, liked songs, listening history
+  ✦ Personalized recommendations based on listening behavior
+  ✦ Artist profiles and album browsing
+
+Two user roles:  Regular User  ·  Administrator
+Stack:           React  ·  Node.js  ·  MariaDB</pre>
+    <div class="say"><strong>Say:</strong> "Pulse Play is a database-driven web application. Users register, search for music, play songs, build playlists, and receive recommendations based on their listening history. We identified two roles in our SRS: regular users who consume music, and administrators who manage the catalog. The stack is React on the frontend, Node.js with Express on the backend, and MariaDB as the relational database."</div>
+  </div>
+</div>
+
+<div class="demo-block">
+  <div class="demo-header">
+    <span class="demo-title">HABIB'S DEMO — Frontend UI</span>
+    <span class="badge badge-green">2.5 minutes</span>
+  </div>
+  <div class="demo-body">
+    <p><em>What Habib built: React UI — sidebar, home page, search view, browse view, artist/album pages, player controls.</em></p>
+    <p><em>Switch to browser at <code>http://localhost:3000</code></em></p>
+    <div class="step-box">
+      <div class="step-num">Step 1 — Home Page &amp; Navigation</div>
+      <div class="step-action">Point to the sidebar</div>
+      <div class="say"><strong>Say:</strong> "I built the entire frontend interface. The sidebar shows Home, Search, and Browse to everyone. Library and Liked Songs only appear after login — enforcing FR-AUTH-004 from our SRS."</div>
+    </div>
+    <div class="step-box">
+      <div class="step-num">Step 2 — Browse Page</div>
+      <div class="step-action">Click Browse → show Songs, Artists, Albums tabs → click any artist (e.g. Queen)</div>
+      <div class="say"><strong>Say:</strong> "The Browse page loads all catalog data from the database through API calls. The artist page shows their profile, song count, followers — every number is live from the database."</div>
+    </div>
+    <div class="step-box">
+      <div class="step-num">Step 3 — Search</div>
+      <div class="step-action">Click Search → type <code>Coldplay</code> → then type <code>Hip-Hop</code></div>
+      <div class="say"><strong>Say:</strong> "Search is debounced — it waits 300ms after you stop typing before hitting the API. It matches by song title, artist name, genre, and album title. Typing Hip-Hop returns all Hip-Hop songs in the database."</div>
+    </div>
+  </div>
+</div>
+
+<div class="slide-block">
+  <div class="slide-header">
+    <span class="slide-title">SLIDE 7 — Software Engineering Process</span>
+    <span class="slide-time">1.5 minutes</span>
+  </div>
+  <div class="slide-body">
+    <pre>Methodology: Agile-Inspired Iterative Development
+
+  Sprint 1 (Jan–Feb)   Requirements, ER diagram, Logical Data Model
+  Sprint 2 (Mar–Apr)   Database schema, backend API, frontend layout
+  Sprint 3 (May)       Integration, bug fixing, demo preparation
+
+  Gantt Chart revised May 3rd — real adaptation, not just a plan
+
+What Changed from SRS → Final Product
+  Deferred:  Admin panel, Subscription UI, Mood-based playlist generator
+  Why:       Integration work in May consumed more time than estimated
+
+What We Would Do Differently
+  → Test frontend-backend connection in week 1
+  → Commit the database schema on day one
+  → Build admin panel earlier — it was always in scope</pre>
+    <div class="say"><strong>Say:</strong> "We followed an Agile-inspired process with three sprints. The Gantt was revised on May 3rd — that's real adaptation. Not everything from the SRS shipped. The admin panel and subscription UI were deferred because integration took longer than planned. If we started over, we would connect frontend to backend in week one and commit the SQL schema from day one so every team member could run the project independently. I'll pass to Hassan for the database."</div>
+  </div>
+</div>
+
+<!-- ═══════════════ HASSAN ═══════════════ -->
+<div class="section-divider"><div class="section-divider-line"></div><div class="section-divider-label">NEXT PRESENTER</div><div class="section-divider-line"></div></div>
+
+<div class="part-header">
+  <div class="part-label">Part 2 of 4</div>
+  <div class="part-title">Hassan Ahmad</div>
+  <div class="part-meta">
+    <span class="badge badge-cyan">Database Design</span>
+    <span class="badge badge-purple">Challenges</span>
+    <span class="badge badge-green">~5.5 minutes</span>
+  </div>
+</div>
+
+<div class="slide-block">
+  <div class="slide-header">
+    <span class="slide-title">SLIDE 4 — Database Design</span>
+    <span class="slide-time">2 minutes</span>
+  </div>
+  <div class="slide-body">
+    <pre>9 Tables — from SRS Section 3.1.2
+
+  users                   user accounts and subscription type
+  artists                 music creators with follower counts
+  albums                  grouped releases by artist
+  songs                   catalog: play_count, likes_count, audio_url
+  playlists               user-owned collections
+  playlist_songs          many-to-many: playlists ↔ songs + position
+  user_favorites          liked songs per user
+  user_following_artists  followed artists per user
+  listening_history       every play event with timestamp + duration
+  subscriptions           plan records with start/end dates
+
+3 Views
+  artist_statistics       aggregates total plays, songs, albums per artist
+  user_playlist_details   playlists with total_tracks and total_duration
+  active_subscriptions    subscriptions where end_date >= today
+
+5 Stored Procedures
+  add_song_to_playlist        position calculation + total_tracks update
+  remove_song_from_playlist   delete + recalculate duration atomically
+  record_song_play            INSERT history + UPDATE play_count
+  get_user_recommendations    genre/artist matching from history
+  update_user_subscription    create record + sync user plan
+
+Key Relationship: playlist_songs (SRS Rule 4 — many-to-many)
+  → position column maintains song order within playlist
+  → stored procedure ensures total_tracks is always consistent</pre>
+    <div class="say"><strong>Say:</strong> "Our database has 9 tables that map directly to the entities defined in Section 3.1 of our SRS. The most important design decision is the playlist_songs junction table — it resolves the many-to-many between playlists and songs and adds a position column for ordering. Rather than handling this in application code, we put the logic in stored procedures. Adding a song calls a procedure that calculates the next position, inserts the record, and updates total_tracks atomically in one database call."</div>
+  </div>
+</div>
+
+<div class="demo-block">
+  <div class="demo-header">
+    <span class="demo-title">HASSAN'S DEMO — Database Live</span>
+    <span class="badge badge-green">2 minutes</span>
+  </div>
+  <div class="demo-body">
+    <p><em>What Hassan built: ER diagram, all 9 tables, 3 views, 5 stored procedures.</em></p>
+    <p><em>Switch to MariaDB terminal — already on <code>USE pulse_play;</code></em></p>
+    <div class="step-box">
+      <div class="step-num">Step 1 — Show tables</div>
+      <pre>SHOW TABLES;</pre>
+      <div class="say"><strong>Say:</strong> "Nine tables — exactly what we designed in the SRS."</div>
+    </div>
+    <div class="step-box">
+      <div class="step-num">Step 2 — Show artist_statistics view</div>
+      <pre>SELECT name, genre, total_plays, total_songs
+FROM artist_statistics
+ORDER BY total_plays DESC LIMIT 5;</pre>
+      <div class="say"><strong>Say:</strong> "This is our artist_statistics view. The frontend queries it when loading artists — it joins the artists table with songs and aggregates play counts. The frontend doesn't need to know the join logic."</div>
+    </div>
+    <div class="step-box">
+      <div class="step-num">Step 3 — Show stored procedure running</div>
+      <pre>CALL record_song_play(1, 1, 200, 'web');
+SELECT title, play_count FROM songs WHERE song_id = 1;</pre>
+      <div class="say"><strong>Say:</strong> "I manually called record_song_play — same procedure the backend calls when a user plays a song. The play_count incremented and a history record was inserted. One call, two table changes, atomically."</div>
+    </div>
+    <div class="step-box">
+      <div class="step-num">Step 4 — Show recommendations</div>
+      <pre>CALL get_user_recommendations(1, 5);</pre>
+      <div class="say"><strong>Say:</strong> "The recommendation procedure joins listening history, finds the user's most played genres and artists, and returns matching songs they haven't liked yet. Pure relational logic — no external service needed."</div>
+    </div>
+  </div>
+</div>
+
+<div class="slide-block">
+  <div class="slide-header">
+    <span class="slide-title">SLIDE 8 — Challenges &amp; Lessons</span>
+    <span class="slide-time">1.5 minutes</span>
+  </div>
+  <div class="slide-body">
+    <pre>Most Significant Challenge: Integration
+
+What blocked us:
+  ✗ dotenv never loaded    → backend crashed on every startup
+  ✗ API URLs hardcoded     → breaks outside one specific machine
+  ✗ No schema.sql in repo  → nobody could run the project independently
+  ✗ Missing PUT route      → Edit Playlist silently failed in frontend
+  ✗ Token expired in 15min → Library tab showed blank screen
+
+How we resolved each one:
+  ✓ Added import 'dotenv/config' to env.js
+  ✓ Changed all URLs to relative /api/ paths (Vite proxy handles routing)
+  ✓ Created complete schema.sql — tables, views, procedures, seed data
+  ✓ Added PUT /api/playlists/:id route
+  ✓ Extended JWT to 24h, added Array.isArray guard on all fetches
+
+Lesson:
+  "Integration is not automatic. It needs its own sprint."</pre>
+    <div class="say"><strong>Say:</strong> "Our biggest challenge was integration. Each piece worked separately but connecting them revealed five blockers — dotenv not loading, hardcoded URLs, no SQL schema in the repo, a missing route, and an expiring token. Each had a targeted fix. The lesson: integration needs to be a deliverable from sprint one, not assumed to work at the end. I'll hand to Mohamad for the architecture."</div>
+  </div>
+</div>
+
+<!-- ═══════════════ MOHAMAD ═══════════════ -->
+<div class="section-divider"><div class="section-divider-line"></div><div class="section-divider-label">NEXT PRESENTER</div><div class="section-divider-line"></div></div>
+
+<div class="part-header">
+  <div class="part-label">Part 3 of 4</div>
+  <div class="part-title">Mohamad Diab</div>
+  <div class="part-meta">
+    <span class="badge badge-cyan">Architecture</span>
+    <span class="badge badge-purple">Requirements</span>
+    <span class="badge badge-green">~5.5 minutes</span>
+  </div>
+</div>
+
+<div class="slide-block">
+  <div class="slide-header">
+    <span class="slide-title">SLIDE 3 — System Architecture</span>
+    <span class="slide-time">2 minutes</span>
+  </div>
+  <div class="slide-body">
+    <pre>┌──────────────┐   /api/* requests   ┌────────────────────────┐
+│    React     │ ──────────────────► │    Express API         │
+│  Frontend    │ ◄────────────────── │    Node.js :5000       │
+│   :3000      │   JSON responses    │                        │
+└──────────────┘                     │  Helmet  (sec headers) │
+                                     │  CORS    (allowlist)   │
+                                     │  JWT     (auth layer)  │
+                                     │  Zod     (validation)  │
+                                     │  Rate    (limiter)     │
+                                     │  13 Route files        │
+                                     └───────────┬────────────┘
+                                                 │ SQL + Stored Procedures
+                                     ┌───────────▼────────────┐
+                                     │   MariaDB  :3306       │
+                                     │   9 Tables · 3 Views   │
+                                     │   5 Stored Procedures  │
+                                     └────────────────────────┘
+
+Why these choices:
+  React    → component model matches modular SRS (NFR-MAINT-001)
+  JWT      → stateless, supports 100+ concurrent users (NFR-SCAL-001)
+  MariaDB  → FK constraints enforce data integrity (NFR-REL-003)
+  Zod      → input validation at API boundary blocks bad data</pre>
+    <div class="say"><strong>Say:</strong> "The system is three-tier. React on port 3000 never talks to the database directly — all requests go through the Express API on port 5000, which is the only layer that touches the database. This satisfies NFR-SEC from our SRS. Inside the API, five middleware layers run on every request before reaching one of 13 independent route files. We chose JWT because it is stateless — the server holds no session state, allowing the system to handle 100+ concurrent users as required by NFR-SCAL-001."</div>
+  </div>
+</div>
+
+<div class="demo-block">
+  <div class="demo-header">
+    <span class="demo-title">MOHAMAD'S DEMO — Backend API Live</span>
+    <span class="badge badge-green">2 minutes</span>
+  </div>
+  <div class="demo-body">
+    <p><em>What Mohamad built: Express backend — middleware stack, JWT auth, Zod validation, all 13 route files.</em></p>
+    <div class="step-box">
+      <div class="step-num">Step 1 — Health Endpoint</div>
+      <div class="step-action">Open new browser tab → go to <code>http://localhost:5000/health</code></div>
+      <div class="say"><strong>Say:</strong> "The health endpoint confirms the server is running and the database connection is active. In Docker, this is what the container orchestrator checks before starting the frontend."</div>
+    </div>
+    <div class="step-box">
+      <div class="step-num">Step 2 — Watch API calls in DevTools</div>
+      <div class="step-action">Go to <code>http://localhost:3000</code> → press F12 → Network tab → XHR/Fetch filter → refresh page</div>
+      <div class="say"><strong>Say:</strong> "Two API calls fire in parallel when the home page loads — trending songs and artists — both under 100ms. Click on the trending songs request to see the raw JSON response: song titles, artist names, play counts, all joined from three tables."</div>
+    </div>
+    <div class="step-box">
+      <div class="step-num">Step 3 — Show a Protected Route Blocked</div>
+      <div class="step-action">Address bar → <code>http://localhost:5000/api/playlists/user/1</code></div>
+      <div class="say"><strong>Say:</strong> "Accessing a protected route without a token returns 401 immediately — the auth middleware blocks it before it reaches the database. This is NFR-SEC-001: authentication required before any user-specific feature."</div>
+    </div>
+  </div>
+</div>
+
+<div class="slide-block">
+  <div class="slide-header">
+    <span class="slide-title">SLIDE 5 — Requirements Coverage</span>
+    <span class="slide-time">1.5 minutes</span>
+  </div>
+  <div class="slide-body">
+    <pre>Fully Implemented ✅
+  FR-AUTH      Register, login, logout, JWT session management
+  FR-SEARCH    By title, artist, genre, album — debounced
+  FR-SONG      Playback, history recording at 80%, like/unlike
+  FR-HISTORY   Full history, reverse chronological order
+  FR-PLAYLIST  Full CRUD, add/remove songs, stored procs
+  FR-REC       Stored procedure recommendations
+
+Partially Implemented ⚠️
+  FR-SUB       Backend routes complete, no UI screen built
+
+Deferred ❌
+  FR-ADMIN     No admin panel — managed directly via database
+
+NFR Evidence
+  NFR-SEC-002   bcrypt 12 rounds — passwords never in plaintext
+                → SELECT LEFT(password,20) FROM users shows $2b$12$...
+  NFR-PERF-003  record_song_play stored proc fires in &lt;100ms
+  NFR-MAINT-001 13 independent route files — each feature isolated
+  NFR-SCAL-001  Stateless JWT — no server sessions</pre>
+    <div class="say"><strong>Say:</strong> "All core user-facing requirements are fully implemented. Subscription UI and admin panel were deferred — backend routes exist for both. On non-functional requirements: passwords use bcrypt at 12 rounds so plaintext is never stored, API calls return under 100ms locally, and 13 independent route files directly satisfy our maintainability requirement. I'll hand it to Bernard for the live demo."</div>
+  </div>
+</div>
+
+<!-- ═══════════════ BERNARD ═══════════════ -->
+<div class="section-divider"><div class="section-divider-line"></div><div class="section-divider-label">NEXT PRESENTER</div><div class="section-divider-line"></div></div>
+
+<div class="part-header">
+  <div class="part-label">Part 4 of 4</div>
+  <div class="part-title">Bernard Mazraani</div>
+  <div class="part-meta">
+    <span class="badge badge-pink">Live Demo</span>
+    <span class="badge badge-cyan">Integration</span>
+    <span class="badge badge-green">~5.5 minutes</span>
+  </div>
+</div>
+
+<div class="slide-block">
+  <div class="slide-header">
+    <span class="slide-title">SLIDE 6 — Live Demo Intro</span>
+    <span class="slide-time">30 seconds</span>
+  </div>
+  <div class="slide-body">
+    <pre>LIVE DEMO
+  Real system  ·  Real database  ·  No screenshots
+
+  Flow 1:  Register → Search → Play → Like → DB verification
+  Flow 2:  Create Playlist → Add Songs → Manage → DB verification
+  Error:   Validation cases from SRS requirements</pre>
+    <div class="say"><strong>Say:</strong> "Everything you have seen on the slides is running right now. I am going to show you two complete end-to-end flows that touch every layer — frontend, backend, and database. Every action I take creates a real record."</div>
+  </div>
+</div>
+
+<div class="demo-block">
+  <div class="demo-header">
+    <span class="demo-title">BERNARD'S DEMO — Full End-to-End Flows</span>
+    <span class="badge badge-green">5 minutes</span>
+  </div>
+  <div class="demo-body">
+    <p><em>Have ready: browser on <code>http://localhost:3000</code>, MariaDB terminal with <code>USE pulse_play;</code> already typed.</em></p>
+
+    <h4>Flow 1 — Register → Play → Like (2.5 min)</h4>
+
+    <div class="step-box">
+      <div class="step-num">Step 1 — Register</div>
+      <div class="step-action">Click Sign In → switch to Sign Up → fill in:
+        <ul>
+          <li>Name: <code>Bernard Demo</code></li>
+          <li>Country: <code>Lebanon</code></li>
+          <li>Email: <code>bernard@demo.com</code></li>
+          <li>Password: <code>Bernard@123</code></li>
+        </ul>
+        Click Create Account
+      </div>
+      <div class="say"><strong>Say:</strong> "Account created. Let me prove it hit the database right now."</div>
+      <pre>SELECT user_id, name, email, LEFT(password,20) AS password_hash
+FROM users ORDER BY join_date DESC LIMIT 1;</pre>
+      <div class="say"><strong>Say:</strong> "There — user ID assigned, and the password is a bcrypt hash starting with $2b$12. The real password was never stored. This is NFR-SEC-002."</div>
+    </div>
+
+    <div class="step-box">
+      <div class="step-num">Step 2 — Search and Play</div>
+      <div class="step-action">Click Search → type <code>Queen</code> → click Bohemian Rhapsody</div>
+      <div class="say"><strong>Say:</strong> "The player bar appears. Watch the waveform animation next to the song title — live feedback that the song is playing."</div>
+      <div class="step-action">Demonstrate: shuffle on, click next, click previous, adjust volume</div>
+      <div class="say"><strong>Say:</strong> "Every control works — shuffle, skip, previous, volume, repeat."</div>
+    </div>
+
+    <div class="step-box">
+      <div class="step-num">Step 3 — Like a Song</div>
+      <div class="step-action">Click the heart icon on the player bar → click Liked Songs in sidebar</div>
+      <pre>SELECT u.name, s.title FROM user_favorites uf
+JOIN users u ON uf.user_id = u.user_id
+JOIN songs s ON uf.song_id = s.song_id
+WHERE u.email = 'bernard@demo.com';</pre>
+      <div class="say"><strong>Say:</strong> "Confirmed in the database. FR-SONG-003 — liked song linked to our user in user_favorites."</div>
+    </div>
+
+    <div class="step-box">
+      <div class="step-num">Step 4 — Genre Browsing</div>
+      <div class="step-action">Go to Home → click the Rock genre card</div>
+      <div class="say"><strong>Say:</strong> "Genre view loads all Rock songs — Queen, Coldplay, Arctic Monkeys, Linkin Park — filtered by genre from the database."</div>
+    </div>
+
+    <h4>Flow 2 — Playlist Management (2 min)</h4>
+
+    <div class="step-box">
+      <div class="step-num">Step 5 — Create Playlist</div>
+      <div class="step-action">Click Your Library → Create Playlist → name: <code>Demo Playlist</code> → Create</div>
+    </div>
+
+    <div class="step-box">
+      <div class="step-num">Step 6 — Add 3 Songs</div>
+      <div class="step-action">Browse → hover any song → click + → select Demo Playlist → repeat for 2 more songs</div>
+      <pre>SELECT title, total_tracks, total_duration
+FROM playlists WHERE title = 'Demo Playlist';</pre>
+      <div class="say"><strong>Say:</strong> "Total tracks is 3. Total duration was calculated automatically by the add_song_to_playlist stored procedure — we never manually wrote that number."</div>
+    </div>
+
+    <div class="step-box">
+      <div class="step-num">Step 7 — Open Playlist &amp; Show Queue</div>
+      <div class="step-action">Click Demo Playlist → click first song → click the queue button bottom right</div>
+      <div class="say"><strong>Say:</strong> "Songs are in order — the stored procedure assigned positions 1, 2, 3 automatically. The full playlist is loaded into the queue."</div>
+    </div>
+
+    <div class="step-box">
+      <div class="step-num">Step 8 — Remove a Song</div>
+      <div class="step-action">Click X on one song → confirm</div>
+      <pre>SELECT title, total_tracks FROM playlists WHERE title = 'Demo Playlist';</pre>
+      <div class="say"><strong>Say:</strong> "Down to 2 tracks — remove_song_from_playlist updated the count automatically."</div>
+    </div>
+
+    <h4>Error Validation (30 sec)</h4>
+
+    <div class="step-box">
+      <div class="step-num">Step 9 — Show Error Cases</div>
+      <div class="step-action">Try registering with <code>bernard@demo.com</code> again → show "Email already in use" (FR-AUTH-003)</div>
+      <div class="step-action">Try creating a playlist with empty name → show "Playlist name cannot be empty" (FR-PLAYLIST-002)</div>
+      <div class="say"><strong>Say:</strong> "Every error message matches exactly what the SRS specifies. No raw stack traces exposed to the user — NFR-USE-002. That's the full demo. Thank you."</div>
+    </div>
+  </div>
+</div>
+
+<!-- CONTRIBUTIONS -->
+<div class="section-divider"><div class="section-divider-line"></div><div class="section-divider-label">FINAL SLIDE</div><div class="section-divider-line"></div></div>
+
+<div class="slide-block">
+  <div class="slide-header">
+    <span class="slide-title">SLIDE 9 — Individual Contributions</span>
+    <span class="slide-time">1 minute — All speak</span>
+  </div>
+  <div class="slide-body">
+    <table class="data-table">
+      <tr><th>Member</th><th>Contribution</th><th>Says</th></tr>
+      <tr>
+        <td><strong>Hassan Ahmad</strong></td>
+        <td>Database design, ER diagram, all 9 tables, 3 views, 5 stored procedures</td>
+        <td><em>"I designed and built the entire database — from the ER diagram to the stored procedures that drive the core features."</em></td>
+      </tr>
+      <tr>
+        <td><strong>Mohamad Diab</strong></td>
+        <td>System architecture, Express backend, JWT auth, Zod validation, 13 API routes</td>
+        <td><em>"I designed the system architecture and built the Express backend — middleware stack, authentication, and all 13 API route files."</em></td>
+      </tr>
+      <tr>
+        <td><strong>Habib Koussa</strong></td>
+        <td>React frontend, all UI components, sidebar, player controls, search, browse views</td>
+        <td><em>"I built the React frontend — every UI component, the player controls, sidebar navigation, search, and browse pages."</em></td>
+      </tr>
+      <tr>
+        <td><strong>Bernard Mazraani</strong></td>
+        <td>Full-stack integration, deployment, bug resolution, UI redesign, seed data</td>
+        <td><em>"I handled the integration — connecting all layers, fixing the blockers, setting up the database with seed data, and redesigning the UI for the demo."</em></td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+<!-- QA -->
+<div class="tips-box">
+  <h3>Possible Doctor Questions — Quick Reference</h3>
+  <table class="qa-table">
+    <tr><th>Question</th><th>Who</th><th>Answer</th></tr>
+    <tr><td>"What does bcrypt do?"</td><td>Hassan</td><td>One-way hash with cost factor 12 — makes brute force computationally expensive. Never reversible.</td></tr>
+    <tr><td>"Why JWT not sessions?"</td><td>Mohamad</td><td>Stateless — server stores nothing. Scales to 100+ users without a shared session store (NFR-SCAL-001).</td></tr>
+    <tr><td>"What does the recommendation proc do?"</td><td>Hassan</td><td>Joins listening history to find top genres/artists, returns matching songs the user hasn't liked yet.</td></tr>
+    <tr><td>"Why MariaDB not MongoDB?"</td><td>Mohamad</td><td>SRS required relational model with FK constraints for data integrity and the many-to-many relationships.</td></tr>
+    <tr><td>"How does search work?"</td><td>Habib</td><td>Debounced input → GET /api/songs/search/:query → LIKE match on title, artist name, genre, album title.</td></tr>
+    <tr><td>"Is SQL injection possible?"</td><td>Mohamad</td><td>No — parameterized queries with ? placeholders everywhere. User input never concatenated into SQL strings.</td></tr>
+    <tr><td>"What would you add with more time?"</td><td>Anyone</td><td>Admin panel, real audio streaming (backend route exists), subscription UI screen.</td></tr>
+  </table>
+</div>
+
+<p style="text-align:center;color:var(--muted);font-size:11px;margin-top:40px;font-family:'Fira Code',monospace;">
+  Pulse Play · COE416 Group 6 · Lebanese American University · Spring 2026
+</p>
+
+</div>
+</body>
+</html>
