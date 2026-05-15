@@ -23,6 +23,8 @@ import followingRouter from './src/routes/following.js';
 import dashboardRouter from './src/routes/dashboard.js';
 import queriesRouter from './src/routes/queries.js';
 import streamRouter from './src/routes/stream.js';
+import chatRouter from './src/routes/chat.js';
+import podcastsRouter from './src/routes/podcasts.js';
 
 const app = express();
 
@@ -80,6 +82,8 @@ app.use('/api/following', followingRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/queries', queriesRouter);
 app.use('/api/stream', streamRouter);
+app.use('/api/chat', chatRouter);
+app.use('/api/podcasts', podcastsRouter);
 
 // Global error handler (must be last)
 app.use(errorHandler);

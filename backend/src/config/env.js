@@ -12,6 +12,8 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(32),
   ALLOWED_ORIGINS: z.string().default('http://localhost:3000'),
   SENTRY_DSN: z.string().url().optional(),
+  ANTHROPIC_API_KEY: z.string().optional(),
+  GROQ_API_KEY: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

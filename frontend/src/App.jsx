@@ -144,6 +144,7 @@ function App() {
   };
 
   const [selectedGenre, setSelectedGenre] = useState(null);
+  const [selectedPodcast, setSelectedPodcast] = useState(null);
 
   const viewArtist = (artist) => {
     setSelectedArtist(artist);
@@ -163,6 +164,26 @@ function App() {
   const viewGenre = (genre) => {
     setSelectedGenre(genre);
     setCurrentView('genre');
+  };
+
+  const viewPodcast = (podcast) => {
+    setSelectedPodcast(podcast);
+    setCurrentView('podcast-detail');
+  };
+
+  const playEpisode = (episode, podcast) => {
+    const asSong = {
+      song_id: `ep_${episode.episode_id}`,
+      title: episode.title,
+      artist_name: podcast?.title || 'Podcast',
+      album_title: `S${episode.season_number} · E${episode.episode_number}`,
+      duration: episode.duration,
+      audio_url: episode.audio_url,
+      genre: podcast?.genre || 'Podcast',
+      play_count: episode.play_count,
+      is_podcast: true,
+    };
+    playSong(asSong);
   };
 
   return (
@@ -258,10 +279,20 @@ function App() {
             />
           )}
           {currentView === 'favorites' && isAuthenticated && (
-            <FavoritesView 
+            <FavoritesView
               currentUser={currentUser}
               playSong={playSong}
               showNotification={showNotification}
+            />
+          )}
+          {currentView === 'podcasts' && (
+            <PodcastsView viewPodcast={viewPodcast} />
+          )}
+          {currentView === 'podcast-detail' && selectedPodcast && (
+            <PodcastDetailView
+              podcast={selectedPodcast}
+              playEpisode={playEpisode}
+              onBack={() => setCurrentView('podcasts')}
             />
           )}
         </div>
@@ -306,7 +337,7 @@ function App() {
       )}
 
       {showQueue && queue.length > 0 && (
-        <QueuePanel 
+        <QueuePanel
           queue={queue}
           queueIndex={queueIndex}
           onClose={() => setShowQueue(false)}
@@ -317,6 +348,8 @@ function App() {
           }}
         />
       )}
+
+      <ChatBot playSong={playSong} hasPlayer={!!currentSong} currentSong={currentSong} />
     </div>
   );
 }
@@ -430,7 +463,7 @@ function Sidebar({ currentView, setCurrentView, isAuthenticated, onLogout, curre
           <span>Search</span>
         </button>
 
-        <button 
+        <button
           className={`nav-item ${currentView === 'browse' ? 'active' : ''}`}
           onClick={() => setCurrentView('browse')}
         >
@@ -441,6 +474,19 @@ function Sidebar({ currentView, setCurrentView, isAuthenticated, onLogout, curre
             <rect x="3" y="14" width="7" height="7"/>
           </svg>
           <span>Browse</span>
+        </button>
+
+        <button
+          className={`nav-item ${currentView === 'podcasts' || currentView === 'podcast-detail' ? 'active' : ''}`}
+          onClick={() => setCurrentView('podcasts')}
+        >
+          <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+            <line x1="8" y1="23" x2="16" y2="23"/>
+          </svg>
+          <span>Podcasts</span>
         </button>
 
         {isAuthenticated && (
@@ -2432,6 +2478,386 @@ function GenreView({ genre, playSong, currentUser, showNotification, onBack }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ============================================================================
+// PODCASTS VIEW
+// ============================================================================
+
+function PodcastsView({ viewPodcast }) {
+  const [podcasts, setPodcasts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/podcasts')
+      .then((r) => r.json())
+      .then((data) => { setPodcasts(Array.isArray(data) ? data : []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  return (
+    <div className="podcasts-view">
+      <div className="podcasts-hero">
+        <h1 className="podcasts-title">Podcasts</h1>
+        <p className="podcasts-subtitle">Music conversations, stories, and deep dives</p>
+      </div>
+
+      {loading ? (
+        <div className="loading-state"><div className="spinner" /><p>Loading podcasts…</p></div>
+      ) : (
+        <div className="podcasts-grid">
+          {podcasts.map((p) => (
+            <PodcastCard key={p.podcast_id} podcast={p} onClick={() => viewPodcast(p)} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PodcastCard({ podcast, onClick }) {
+  const colors = ['#00D4FF', '#FF0080', '#00FF9F', '#8B5CF6', '#FFB800'];
+  const color = colors[podcast.podcast_id % colors.length];
+
+  return (
+    <div className="podcast-card" onClick={onClick}>
+      <div className="podcast-cover" style={{ '--podcast-color': color }}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" y1="19" x2="12" y2="23"/>
+          <line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+      </div>
+      <div className="podcast-info">
+        <h3 className="podcast-name">{podcast.title}</h3>
+        <p className="podcast-host">{podcast.host}</p>
+        <div className="podcast-meta">
+          <span className="podcast-genre">{podcast.genre}</span>
+          <span className="podcast-eps">{podcast.total_episodes} episodes</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// PODCAST DETAIL VIEW
+// ============================================================================
+
+function PodcastDetailView({ podcast, playEpisode, onBack }) {
+  const [detail, setDetail] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/podcasts/${podcast.podcast_id}`)
+      .then((r) => r.json())
+      .then((data) => { setDetail(data); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [podcast.podcast_id]);
+
+  const colors = ['#00D4FF', '#FF0080', '#00FF9F', '#8B5CF6', '#FFB800'];
+  const color = colors[podcast.podcast_id % colors.length];
+
+  return (
+    <div className="podcast-detail">
+      <button className="back-btn" onClick={onBack}>← Back to Podcasts</button>
+
+      <div className="podcast-detail-header">
+        <div className="podcast-detail-cover" style={{ '--podcast-color': color }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+            <line x1="8" y1="23" x2="16" y2="23"/>
+          </svg>
+        </div>
+        <div className="podcast-detail-info">
+          <span className="podcast-detail-label">PODCAST</span>
+          <h1 className="podcast-detail-title">{podcast.title}</h1>
+          <p className="podcast-detail-host">by {podcast.host}</p>
+          <p className="podcast-detail-desc">{podcast.description}</p>
+          <div className="podcast-detail-stats">
+            <span>{formatNumber(podcast.followers_count)} followers</span>
+            <span>·</span>
+            <span>{podcast.total_episodes} episodes</span>
+            <span>·</span>
+            <span>{podcast.genre}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="episodes-section">
+        <h2 className="episodes-title">Episodes</h2>
+        {loading ? (
+          <div className="loading-state"><div className="spinner" /></div>
+        ) : (
+          <div className="episodes-list">
+            {(detail?.episodes || []).map((ep) => (
+              <EpisodeRow
+                key={ep.episode_id}
+                episode={ep}
+                podcast={podcast}
+                onPlay={() => playEpisode(ep, podcast)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EpisodeRow({ episode, podcast, onPlay }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="episode-row">
+      <div className="episode-main">
+        <div className="episode-number">
+          {String(episode.episode_number).padStart(2, '0')}
+        </div>
+        <div className="episode-info">
+          <div className="episode-title">{episode.title}</div>
+          <div className="episode-desc" style={{ display: expanded ? 'block' : '-webkit-box' }}>
+            {episode.description}
+          </div>
+          <div className="episode-meta">
+            <span>{formatDuration(episode.duration)}</span>
+            <span>·</span>
+            <span>S{episode.season_number} E{episode.episode_number}</span>
+            <span>·</span>
+            <span>{formatNumber(episode.play_count)} plays</span>
+            {episode.published_at && (
+              <>
+                <span>·</span>
+                <span>{new Date(episode.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="episode-actions">
+          <button className="episode-expand" onClick={() => setExpanded((e) => !e)} title="Toggle description">
+            {expanded ? '▲' : '▼'}
+          </button>
+          <button className="episode-play" onClick={onPlay} title="Play episode">▶</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// CHATBOT — PULSE ASSISTANT
+// ============================================================================
+
+const GREETING = "Hey! I'm **Pulse**, your AI music companion 🎵\n\nI can find songs for any mood, chat about artists, explain genres, or just geek out about music with you. What's on your mind?";
+
+const SUGGESTIONS = [
+  { emoji: '🌙', text: 'Late night vibes' },
+  { emoji: '💪', text: 'Hype me up for the gym' },
+  { emoji: '📚', text: 'Focus music for studying' },
+  { emoji: '🔥', text: "What's trending right now?" },
+];
+
+function ChatBot({ playSong, hasPlayer, currentSong }) {
+  const [isOpen, setIsOpen] = useState(false);
+  // displayMessages drives the UI — includes the static greeting
+  const [displayMessages, setDisplayMessages] = useState([
+    { id: 0, role: 'assistant', text: GREETING, songs: [] },
+  ]);
+  // apiHistory is what we send to the server — starts empty, grows with real turns
+  const [apiHistory, setApiHistory] = useState([]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasUnread, setHasUnread] = useState(false);
+  const msgId = useRef(1);
+  const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
+  const textareaRef = useRef(null);
+
+  useEffect(() => { if (isOpen) setHasUnread(false); }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [displayMessages, isOpen]);
+
+  useEffect(() => {
+    if (isOpen) inputRef.current?.focus();
+  }, [isOpen]);
+
+  const sendMessage = async (override) => {
+    const text = (override ?? input).trim();
+    if (!text || isLoading) return;
+
+    const newApiHistory = [...apiHistory, { role: 'user', content: text }];
+    setDisplayMessages((prev) => [...prev, { id: msgId.current++, role: 'user', text, songs: [] }]);
+    setApiHistory(newApiHistory);
+    setInput('');
+    if (textareaRef.current) { textareaRef.current.style.height = 'auto'; }
+    setIsLoading(true);
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: newApiHistory,
+          context: currentSong
+            ? { nowPlaying: { title: currentSong.title, artist: currentSong.artist_name, genre: currentSong.genre } }
+            : null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Server error');
+
+      const reply = { id: msgId.current++, role: 'assistant', text: data.reply, songs: data.songs || [] };
+      setDisplayMessages((prev) => [...prev, reply]);
+      setApiHistory((prev) => [...prev, { role: 'assistant', content: data.reply }]);
+      if (!isOpen) setHasUnread(true);
+    } catch (err) {
+      const msg = err?.message && err.message !== 'Server error'
+        ? err.message
+        : "Couldn't reach the server. Make sure the backend is running and ANTHROPIC_API_KEY is set in backend/.env.";
+      setDisplayMessages((prev) => [
+        ...prev,
+        { id: msgId.current++, role: 'assistant', text: msg, songs: [] },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const clearChat = () => {
+    setDisplayMessages([{ id: msgId.current++, role: 'assistant', text: "Fresh start! What are you in the mood for? 🎵", songs: [] }]);
+    setApiHistory([]);
+  };
+
+  const handleKey = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  };
+
+  const handleTextareaChange = (e) => {
+    setInput(e.target.value);
+    e.target.style.height = 'auto';
+    e.target.style.height = Math.min(e.target.scrollHeight, 96) + 'px';
+  };
+
+  const isFirstMessage = displayMessages.length <= 1;
+
+  return (
+    <>
+      {isOpen && (
+        <div className={`chatbot-panel ${hasPlayer ? 'chatbot-panel--player' : ''}`}>
+          {/* Header */}
+          <div className="chatbot-header">
+            <div className="chatbot-header-info">
+              <div className="chatbot-avatar">♪</div>
+              <div>
+                <div className="chatbot-name">Pulse Assistant</div>
+                <div className="chatbot-status">
+                  {currentSong ? `♫ ${currentSong.title} — ${currentSong.artist_name}` : 'AI Music Companion · Online'}
+                </div>
+              </div>
+            </div>
+            <div className="chatbot-header-actions">
+              <button className="chatbot-action-btn" onClick={clearChat} title="New conversation" aria-label="Clear chat">↺</button>
+              <button className="chatbot-close" onClick={() => setIsOpen(false)} aria-label="Close">✕</button>
+            </div>
+          </div>
+
+          {/* Messages */}
+          <div className="chatbot-messages">
+            {displayMessages.map((msg) => (
+              <div key={msg.id} className={`chatbot-bubble-wrap ${msg.role === 'user' ? 'chatbot-bubble-wrap--user' : 'chatbot-bubble-wrap--assistant'}`}>
+                {msg.role === 'assistant' && <div className="chatbot-mini-avatar">P</div>}
+                <div className="chatbot-bubble-col">
+                  <div className={`chatbot-bubble ${msg.role === 'user' ? 'chatbot-bubble--user' : 'chatbot-bubble--assistant'}`}>
+                    <RichText text={msg.text} />
+                  </div>
+                  {msg.songs && msg.songs.length > 0 && (
+                    <div className="chatbot-songs">
+                      {msg.songs.map((song) => (
+                        <button key={song.song_id} className="chatbot-song-card" onClick={() => { playSong(song); }}>
+                          <div className="chatbot-song-play">▶</div>
+                          <div className="chatbot-song-info">
+                            <div className="chatbot-song-title">{song.title}</div>
+                            <div className="chatbot-song-meta">{song.artist_name} · {song.genre} · {formatDuration(song.duration)}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {isLoading && (
+              <div className="chatbot-bubble-wrap chatbot-bubble-wrap--assistant">
+                <div className="chatbot-mini-avatar">P</div>
+                <div className="chatbot-bubble chatbot-bubble--assistant chatbot-bubble--typing">
+                  <span /><span /><span />
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Quick suggestions — only shown before first message */}
+          {isFirstMessage && (
+            <div className="chatbot-suggestions">
+              {SUGGESTIONS.map((s) => (
+                <button key={s.text} className="chatbot-suggestion" onClick={() => sendMessage(s.text)}>
+                  <span>{s.emoji}</span> {s.text}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Input */}
+          <div className="chatbot-input-row">
+            <textarea
+              ref={(el) => { inputRef.current = el; textareaRef.current = el; }}
+              className="chatbot-input"
+              placeholder="Ask anything about music…"
+              value={input}
+              onChange={handleTextareaChange}
+              onKeyDown={handleKey}
+              disabled={isLoading}
+              rows={1}
+            />
+            <button className="chatbot-send" onClick={() => sendMessage()} disabled={!input.trim() || isLoading} aria-label="Send">
+              ➤
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* FAB */}
+      <button
+        className={`chatbot-fab ${hasPlayer ? 'chatbot-fab--player' : ''} ${isOpen ? 'chatbot-fab--open' : ''}`}
+        onClick={() => setIsOpen((o) => !o)}
+        aria-label={isOpen ? 'Close assistant' : 'Open music assistant'}
+      >
+        {isOpen ? '✕' : '♪'}
+        {hasUnread && !isOpen && <span className="chatbot-badge" />}
+      </button>
+    </>
+  );
+}
+
+// Renders **bold** and \n as <br> — no external deps
+function RichText({ text }) {
+  const parts = text.split(/(\*\*[^*]+\*\*|\n)/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**')) return <strong key={i}>{part.slice(2, -2)}</strong>;
+        if (part === '\n') return <br key={i} />;
+        return part;
+      })}
+    </>
   );
 }
 
