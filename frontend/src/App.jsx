@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import './App.css';
 
 // ============================================================================
@@ -42,8 +43,21 @@ function App() {
       }
     };
 
+    const handleAuthExpired = () => {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      setShowAuth(true);
+      showNotification('Your session expired. Please sign in again.', 'error');
+    };
+
     window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
+    window.addEventListener('auth-expired', handleAuthExpired);
+    return () => {
+      window.removeEventListener('keydown', handleKeyPress);
+      window.removeEventListener('auth-expired', handleAuthExpired);
+    };
   }, [isPlaying, currentSong]);
 
   const showNotification = (message, type = 'success') => {
@@ -52,7 +66,13 @@ function App() {
   };
 
   const handleLogin = (token, user) => {
-    localStorage.setItem('token', token);
+    const authToken = token?.token || token?.accessToken || token?.authToken || token?.jwt || token;
+    if (!authToken || typeof authToken !== 'string') {
+      showNotification('Login did not return a valid token', 'error');
+      return;
+    }
+
+    localStorage.setItem('token', authToken);
     localStorage.setItem('user', JSON.stringify(user));
     setIsAuthenticated(true);
     setCurrentUser(user);
@@ -80,7 +100,7 @@ function App() {
     if (songList.length > 0) {
       const shuffledList = isShuffled ? shuffleArray([...songList]) : songList;
       setQueue(shuffledList);
-      const index = shuffledList.findIndex(s => s.song_id === song.song_id);
+      const index = shuffledList.findIndex(s => String(getSongId(s)) === String(getSongId(song)));
       setQueueIndex(index >= 0 ? index : 0);
     } else if (queue.length === 0) {
       setQueue([song]);
@@ -122,10 +142,10 @@ function App() {
   const toggleShuffle = () => {
     setIsShuffled(!isShuffled);
     if (!isShuffled && queue.length > 0) {
-      const currentSongId = currentSong?.song_id;
+      const currentSongId = getSongId(currentSong);
       const shuffled = shuffleArray([...queue]);
       setQueue(shuffled);
-      const newIndex = shuffled.findIndex(s => s.song_id === currentSongId);
+      const newIndex = shuffled.findIndex(s => String(getSongId(s)) === String(currentSongId));
       if (newIndex >= 0) setQueueIndex(newIndex);
     }
     showNotification(!isShuffled ? 'Shuffle enabled' : 'Shuffle disabled');
@@ -363,7 +383,172 @@ function shuffleArray(array) {
   return shuffled;
 }
 
-// ============================================================================
+function getSongId(song) {
+  return song?.song_id ?? song?.songId ?? song?.id ?? song?._id;
+}
+
+function getStableSongKey(song, fallback = '') {
+  const id = getSongId(song);
+  return id != null ? String(id) : `song-${fallback}`;
+}
+
+function normalizeSongList(data) {
+  if (Array.isArray(data)) return data.filter(Boolean);
+  if (Array.isArray(data?.songs)) return data.songs.filter(Boolean);
+  if (Array.isArray(data?.results)) return data.results.filter(Boolean);
+  if (Array.isArray(data?.data)) return data.data.filter(Boolean);
+  return [];
+}
+
+function getCurrentUserCacheId() {
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || 'null');
+    const stableId = user?.userId ?? user?.user_id ?? user?.id ?? user?.email;
+    return stableId ? String(stableId).toLowerCase() : 'guest';
+  } catch (_) {
+    return 'guest';
+  }
+}
+
+function scopedStorageKey(key) {
+  const userScopedKeys = [
+    'pulse-cache-user-playlists',
+    'pulse-cache-playlist-details',
+    'pulse-liked-song-ids',
+    'pulse-liked-songs',
+  ];
+  return userScopedKeys.some((prefix) => key.startsWith(prefix))
+    ? `${key}:${getCurrentUserCacheId()}`
+    : key;
+}
+
+function readCachedList(key) {
+  try {
+    const data = JSON.parse(localStorage.getItem(scopedStorageKey(key)) || '[]');
+    return Array.isArray(data) ? data.filter(Boolean) : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function saveCachedList(key, list) {
+  if (Array.isArray(list) && list.length > 0) {
+    localStorage.setItem(scopedStorageKey(key), JSON.stringify(list));
+  }
+}
+
+function useLastGoodList(incoming, cacheKey) {
+  const list = Array.isArray(incoming) ? incoming.filter(Boolean) : [];
+  if (list.length > 0) {
+    saveCachedList(cacheKey, list);
+    return list;
+  }
+  return readCachedList(cacheKey);
+}
+
+function normalizePlaylists(data) {
+  if (Array.isArray(data)) return data.filter(Boolean);
+  if (Array.isArray(data?.playlists)) return data.playlists.filter(Boolean);
+  if (Array.isArray(data?.data)) return data.data.filter(Boolean);
+  return [];
+}
+
+const LIKED_SONGS_STORAGE_KEY = 'pulse-liked-song-ids';
+const LIKED_SONG_OBJECTS_STORAGE_KEY = 'pulse-liked-songs';
+
+function readLikedSongIds() {
+  try {
+    const cached = JSON.parse(localStorage.getItem(scopedStorageKey(LIKED_SONGS_STORAGE_KEY)) || '[]');
+    return new Set(Array.isArray(cached) ? cached.map(String) : []);
+  } catch (_) {
+    return new Set();
+  }
+}
+
+function saveLikedSongIds(ids) {
+  localStorage.setItem(scopedStorageKey(LIKED_SONGS_STORAGE_KEY), JSON.stringify([...ids]));
+}
+
+function isSongLikedInCache(songId) {
+  if (songId == null) return false;
+  return readLikedSongIds().has(String(songId));
+}
+
+function setCachedSongLike(songId, liked) {
+  if (songId == null) return;
+  const ids = readLikedSongIds();
+  const key = String(songId);
+  if (liked) ids.add(key);
+  else ids.delete(key);
+  saveLikedSongIds(ids);
+}
+
+function mergeSongLists(primary, secondary) {
+  const merged = new Map();
+  normalizeSongList(secondary).forEach((song) => {
+    const id = getSongId(song);
+    if (id != null) merged.set(String(id), song);
+  });
+  normalizeSongList(primary).forEach((song) => {
+    const id = getSongId(song);
+    if (id != null) merged.set(String(id), song);
+  });
+  return [...merged.values()];
+}
+
+function syncCachedLikesFromFavorites(favorites) {
+  const serverSongs = normalizeSongList(favorites);
+  if (serverSongs.length === 0) return readLikedSongs();
+
+  const mergedSongs = mergeSongLists(readLikedSongs(), serverSongs);
+  const ids = new Set(mergedSongs.map(getSongId).filter((id) => id != null).map(String));
+  saveLikedSongIds(ids);
+  saveLikedSongs(mergedSongs);
+  return mergedSongs;
+}
+
+function readLikedSongs() {
+  try {
+    const cached = JSON.parse(localStorage.getItem(scopedStorageKey(LIKED_SONG_OBJECTS_STORAGE_KEY)) || '[]');
+    return normalizeSongList(cached).filter((song) => getSongId(song) != null);
+  } catch (_) {
+    return [];
+  }
+}
+
+function saveLikedSongs(songs) {
+  const uniqueSongs = new Map();
+  normalizeSongList(songs).forEach((song) => {
+    const id = getSongId(song);
+    if (id != null) uniqueSongs.set(String(id), song);
+  });
+  localStorage.setItem(scopedStorageKey(LIKED_SONG_OBJECTS_STORAGE_KEY), JSON.stringify([...uniqueSongs.values()]));
+}
+
+function setCachedLikedSong(song, liked) {
+  const songId = getSongId(song);
+  if (songId == null) return;
+  const cachedSongs = readLikedSongs();
+  const nextSongs = cachedSongs.filter((item) => String(getSongId(item)) !== String(songId));
+  if (liked) nextSongs.unshift(song);
+  saveLikedSongs(nextSongs);
+}
+
+function getAuthToken() {
+  const token = localStorage.getItem('token');
+  if (!token || token === 'undefined' || token === 'null') return null;
+  return token;
+}
+
+function isAuthErrorMessage(message = '') {
+  return /token|expired|unauthorized|forbidden|jwt/i.test(message);
+}
+
+function expireAuthSession() {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  window.dispatchEvent(new Event('auth-expired'));
+}// ============================================================================
 // NOTIFICATION
 // ============================================================================
 
@@ -408,7 +593,7 @@ function QueuePanel({ queue, queueIndex, onClose, onSongClick }) {
       <div className="queue-list">
         {queue.map((song, index) => (
           <div 
-            key={`${song.song_id}-${index}`}
+            key={`${getStableSongKey(song, index)}-${index}`}
             className={`queue-item ${index === queueIndex ? 'active' : ''}`}
             onClick={() => onSongClick(song, index)}
           >
@@ -431,7 +616,7 @@ function QueuePanel({ queue, queueIndex, onClose, onSongClick }) {
 
 function Sidebar({ currentView, setCurrentView, isAuthenticated, onLogout, currentUser }) {
   return (
-    <div className="sidebar">
+    <div className="sidebar" style={{ height: '100vh', maxHeight: '100vh', overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', paddingBottom: '7rem', overscrollBehavior: 'contain', scrollbarGutter: 'stable' }}>
       <div className="logo" onClick={() => setCurrentView('home')}>
         <div className="logo-icon">
           <div className="pulse-circle"></div>
@@ -440,7 +625,7 @@ function Sidebar({ currentView, setCurrentView, isAuthenticated, onLogout, curre
         <h1>Pulse Play</h1>
       </div>
 
-      <nav className="nav-menu">
+      <nav className="nav-menu" style={{ flex: '0 0 auto' }}>
         <button 
           className={`nav-item ${currentView === 'home' ? 'active' : ''}`}
           onClick={() => setCurrentView('home')}
@@ -518,7 +703,7 @@ function Sidebar({ currentView, setCurrentView, isAuthenticated, onLogout, curre
       </nav>
 
       {isAuthenticated && currentUser && (
-        <div className="sidebar-footer">
+        <div className="sidebar-footer" style={{ flex: '0 0 auto', marginTop: '1rem', paddingBottom: '2rem' }}>
           <div className="sidebar-user">
             <div className="user-avatar-small">
               {currentUser.name?.charAt(0).toUpperCase()}
@@ -578,8 +763,8 @@ function Header({ isAuthenticated, currentUser, onAuthClick }) {
 // ============================================================================
 
 function HomeView({ playSong, isAuthenticated, viewArtist, viewAlbum, viewGenre, currentUser, showNotification }) {
-  const [trendingSongs, setTrendingSongs] = useState([]);
-  const [artists, setArtists] = useState([]);
+  const [trendingSongs, setTrendingSongs] = useState(() => readCachedList('pulse-cache-home-songs'));
+  const [artists, setArtists] = useState(() => readCachedList('pulse-cache-home-artists'));
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -596,8 +781,10 @@ function HomeView({ playSong, isAuthenticated, viewArtist, viewAlbum, viewGenre,
       const songsData = await songsRes.json();
       const artistsData = await artistsRes.json();
       
-      setTrendingSongs(songsData.slice(0, 12));
-      setArtists(artistsData.slice(0, 8));
+      const songsArray = normalizeSongList(songsData);
+      const artistsArray = Array.isArray(artistsData) ? artistsData : artistsData.artists || [];
+      setTrendingSongs(useLastGoodList(songsArray.slice(0, 12), 'pulse-cache-home-songs'));
+      setArtists(useLastGoodList(artistsArray.slice(0, 8), 'pulse-cache-home-artists'));
       setLoading(false);
     } catch (error) {
       console.error('Error fetching home data:', error);
@@ -638,7 +825,7 @@ function HomeView({ playSong, isAuthenticated, viewArtist, viewAlbum, viewGenre,
           <div className="songs-grid">
             {trendingSongs.map((song) => (
               <SongCard 
-                key={song.song_id} 
+                key={getStableSongKey(song)} 
                 song={song} 
                 onPlay={() => playSong(song, trendingSongs)}
                 currentUser={currentUser}
@@ -711,7 +898,7 @@ function SearchView({ playSong, viewArtist, currentUser, showNotification }) {
     try {
       const response = await fetch(`/api/songs/search/${query}`);
       const data = await response.json();
-      setSearchResults(data);
+      setSearchResults(normalizeSongList(data));
     } catch (error) {
       console.error('Search error:', error);
     }
@@ -756,7 +943,7 @@ function SearchView({ playSong, viewArtist, currentUser, showNotification }) {
             <div className="results-list">
               {searchResults.map((song) => (
                 <SongRow 
-                  key={song.song_id} 
+                  key={getStableSongKey(song)} 
                   song={song} 
                   onPlay={() => playSong(song, searchResults)}
                   currentUser={currentUser}
@@ -798,7 +985,7 @@ function SearchView({ playSong, viewArtist, currentUser, showNotification }) {
 // Let me continue with the remaining components
 
 function LibraryView({ currentUser, playSong, viewPlaylist, showNotification }) {
-  const [playlists, setPlaylists] = useState([]);
+  const [playlists, setPlaylists] = useState(() => readCachedList('pulse-cache-user-playlists'));
   const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
   const [showEditPlaylist, setShowEditPlaylist] = useState(null);
 
@@ -819,13 +1006,13 @@ function LibraryView({ currentUser, playSong, viewPlaylist, showNotification }) 
       const playlistsData = await playlistsRes.json();
       if (!playlistsRes.ok) {
         console.error('Playlists error:', playlistsData);
-        setPlaylists([]);
+        setPlaylists(readCachedList('pulse-cache-user-playlists'));
         return;
       }
-      setPlaylists(Array.isArray(playlistsData) ? playlistsData : []);
+      setPlaylists(useLastGoodList(normalizePlaylists(playlistsData), 'pulse-cache-user-playlists'));
     } catch (error) {
       console.error('Error fetching playlists:', error);
-      setPlaylists([]);
+      setPlaylists(readCachedList('pulse-cache-user-playlists'));
     }
   };
 
@@ -944,32 +1131,64 @@ function LibraryView({ currentUser, playSong, viewPlaylist, showNotification }) 
 // Continue with remaining view components and card components...
 
 function FavoritesView({ currentUser, playSong, showNotification }) {
-  const [favorites, setFavorites] = useState([]);
+  const [favorites, setFavorites] = useState(() => readLikedSongs());
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (currentUser) {
-      fetchFavorites();
-    }
-  }, [currentUser]);
+  const normalizeFavorites = (data) => {
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data?.favorites)) return data.favorites;
+    if (Array.isArray(data?.songs)) return data.songs;
+    if (Array.isArray(data?.data)) return data.data;
+    return [];
+  };
 
   const fetchFavorites = async () => {
-    const token = localStorage.getItem('token');
-    
-    try {
-      const response = await fetch(
-        `/api/favorites/${currentUser.userId}`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
-      );
-      const data = await response.json();
-      if (!response.ok) { setFavorites([]); setLoading(false); return; }
-      setFavorites(Array.isArray(data) ? data : []);
+    const token = getAuthToken();
+
+    if (!currentUser || !token) {
+      setFavorites(readLikedSongs());
       setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await fetch('/api/favorites', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        setFavorites(readLikedSongs());
+        return;
+      }
+
+      const data = await response.json();
+      const normalizedFavorites = normalizeFavorites(data);
+      const mergedFavorites = syncCachedLikesFromFavorites(normalizedFavorites);
+      setFavorites(mergedFavorites.length > 0 ? mergedFavorites : readLikedSongs());
     } catch (error) {
       console.error('Error fetching favorites:', error);
+      setFavorites(readLikedSongs());
+    } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchFavorites();
+
+    const refreshFavorites = (event) => {
+      if (event.detail?.song) {
+        setCachedLikedSong(event.detail.song, event.detail.liked);
+      }
+      setFavorites(readLikedSongs());
+    };
+    window.addEventListener('favorites-updated', refreshFavorites);
+
+    return () => window.removeEventListener('favorites-updated', refreshFavorites);
+  }, [currentUser]);
 
   return (
     <div className="favorites-view">
@@ -984,9 +1203,9 @@ function FavoritesView({ currentUser, playSong, showNotification }) {
       ) : favorites.length > 0 ? (
         <div className="favorites-list">
           {favorites.map((song) => (
-            <SongRow 
-              key={song.song_id} 
-              song={song} 
+            <SongRow
+              key={getStableSongKey(song)}
+              song={song}
               onPlay={() => playSong(song, favorites)}
               currentUser={currentUser}
               showNotification={showNotification}
@@ -997,7 +1216,7 @@ function FavoritesView({ currentUser, playSong, showNotification }) {
       ) : (
         <div className="empty-state">
           <svg className="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
           </svg>
           <p>No liked songs yet</p>
           <p className="empty-subtitle">Songs you like will appear here</p>
@@ -1011,9 +1230,9 @@ function FavoritesView({ currentUser, playSong, showNotification }) {
 // Then all card components and interactive elements
 
 function BrowseView({ playSong, viewArtist, viewAlbum, currentUser, showNotification }) {
-  const [songs, setSongs] = useState([]);
-  const [artists, setArtists] = useState([]);
-  const [albums, setAlbums] = useState([]);
+  const [songs, setSongs] = useState(() => readCachedList('pulse-cache-browse-songs'));
+  const [artists, setArtists] = useState(() => readCachedList('pulse-cache-browse-artists'));
+  const [albums, setAlbums] = useState(() => readCachedList('pulse-cache-browse-albums'));
   const [activeCategory, setActiveCategory] = useState('songs');
   const [loading, setLoading] = useState(true);
 
@@ -1023,22 +1242,29 @@ function BrowseView({ playSong, viewArtist, viewAlbum, currentUser, showNotifica
 
   const fetchBrowseData = async () => {
     try {
-      const [songsRes, artistsRes, albumsRes] = await Promise.all([
+      const [songsResult, artistsResult, albumsResult] = await Promise.allSettled([
         fetch('/api/songs'),
         fetch('/api/artists'),
         fetch('/api/albums')
       ]);
 
-      const songsData = await songsRes.json();
-      const artistsData = await artistsRes.json();
-      const albumsData = await albumsRes.json();
+      if (songsResult.status === 'fulfilled' && songsResult.value.ok) {
+        const songsData = await songsResult.value.json();
+        setSongs(useLastGoodList(normalizeSongList(songsData), 'pulse-cache-browse-songs'));
+      }
 
-      setSongs(songsData.songs || []);
-      setArtists(artistsData);
-      setAlbums(albumsData);
-      setLoading(false);
+      if (artistsResult.status === 'fulfilled' && artistsResult.value.ok) {
+        const artistsData = await artistsResult.value.json();
+        setArtists(useLastGoodList(Array.isArray(artistsData) ? artistsData : artistsData.artists || [], 'pulse-cache-browse-artists'));
+      }
+
+      if (albumsResult.status === 'fulfilled' && albumsResult.value.ok) {
+        const albumsData = await albumsResult.value.json();
+        setAlbums(useLastGoodList(Array.isArray(albumsData) ? albumsData : albumsData.albums || [], 'pulse-cache-browse-albums'));
+      }
     } catch (error) {
       console.error('Error fetching browse data:', error);
+    } finally {
       setLoading(false);
     }
   };
@@ -1079,7 +1305,7 @@ function BrowseView({ playSong, viewArtist, viewAlbum, currentUser, showNotifica
             <div className="songs-list">
               {songs.map((song) => (
                 <SongRow 
-                  key={song.song_id} 
+                  key={getStableSongKey(song)} 
                   song={song} 
                   onPlay={() => playSong(song, songs)}
                   currentUser={currentUser}
@@ -1246,7 +1472,7 @@ function ArtistView({ artist, playSong, viewAlbum, currentUser, showNotification
           <h2>Popular</h2>
           <div className="songs-list">
             {artistDetails.songs.slice(0, 5).map((song, index) => (
-              <div key={song.song_id} className="song-row-numbered">
+              <div key={getStableSongKey(song)} className="song-row-numbered">
                 <span className="song-number">{index + 1}</span>
                 <SongRow 
                   song={song} 
@@ -1331,7 +1557,7 @@ function AlbumView({ album, playSong, currentUser, showNotification }) {
       <div className="album-content">
         <div className="songs-list">
           {albumSongs.map((song, index) => (
-            <div key={song.song_id} className="song-row-numbered">
+            <div key={getStableSongKey(song)} className="song-row-numbered">
               <span className="song-number">{index + 1}</span>
               <SongRow 
                 song={song} 
@@ -1349,7 +1575,7 @@ function AlbumView({ album, playSong, currentUser, showNotification }) {
 }
 
 function PlaylistDetailView({ playlist, playSong, currentUser, showNotification, onUpdate }) {
-  const [playlistDetails, setPlaylistDetails] = useState(null);
+  const [playlistDetails, setPlaylistDetails] = useState(() => readCachedList(`pulse-cache-playlist-details-${playlist.playlist_id}`));
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -1360,10 +1586,11 @@ function PlaylistDetailView({ playlist, playSong, currentUser, showNotification,
     try {
       const response = await fetch(`/api/queries/playlist-details/${playlist.playlist_id}`);
       const data = await response.json();
-      setPlaylistDetails(data);
+      setPlaylistDetails(useLastGoodList(Array.isArray(data) ? data : [], `pulse-cache-playlist-details-${playlist.playlist_id}`));
       setLoading(false);
     } catch (error) {
       console.error('Error fetching playlist:', error);
+      setPlaylistDetails(readCachedList(`pulse-cache-playlist-details-${playlist.playlist_id}`));
       setLoading(false);
     }
   };
@@ -1419,16 +1646,17 @@ function PlaylistDetailView({ playlist, playSong, currentUser, showNotification,
         </div>
       </div>
 
-      <div className="playlist-content">
+      <div className="playlist-content" style={{ width: '100%', overflowX: 'hidden' }}>
         {playlistSongs.length > 0 ? (
-          <div className="songs-list">
+          <div className="songs-list" style={{ width: '100%', display: 'grid', gap: '0.75rem' }}>
             {playlistSongs.map((song, index) => (
-              <div key={song.song_id} className="song-row-numbered">
+              <div key={getStableSongKey(song)} className="song-row-numbered" style={{ width: '100%', display: 'grid', gridTemplateColumns: '48px minmax(0, 1fr)', alignItems: 'center' }}>
                 <span className="song-number">{index + 1}</span>
                 <SongRow 
                   song={song} 
                   onPlay={() => playSong(song, playlistSongs)} 
                   hideNumber
+                  fullTitle
                   currentUser={currentUser}
                   showNotification={showNotification}
                   showRemove
@@ -1484,7 +1712,8 @@ function SongCard({ song, onPlay, currentUser, showNotification }) {
       </div>
       <div className="song-card-actions">
         <LikeButton 
-          songId={song.song_id}
+          song={song}
+          songId={getSongId(song)}
           currentUser={currentUser}
           showNotification={showNotification}
         />
@@ -1507,7 +1736,7 @@ function SongCard({ song, onPlay, currentUser, showNotification }) {
 
       {showAddToPlaylist && (
         <AddToPlaylistModal
-          songId={song.song_id}
+          songId={getSongId(song)}
           currentUser={currentUser}
           onClose={() => setShowAddToPlaylist(false)}
           showNotification={showNotification}
@@ -1517,12 +1746,12 @@ function SongCard({ song, onPlay, currentUser, showNotification }) {
   );
 }
 
-function SongRow({ song, onPlay, hideNumber, currentUser, showNotification, showRemove, onRemove, onUpdate }) {
+function SongRow({ song, onPlay, hideNumber, currentUser, showNotification, showRemove, onRemove, onUpdate, fullTitle = false }) {
   const [showAddToPlaylist, setShowAddToPlaylist] = useState(false);
 
   return (
     <>
-      <div className="song-row" onClick={onPlay}>
+      <div className="song-row" onClick={onPlay} style={fullTitle ? { width: '100%', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 96px auto', alignItems: 'center', gap: '1rem', padding: '1rem 1.25rem' } : undefined}>
         {!hideNumber && (
           <div className="song-row-cover">
             {song.cover_image ? (
@@ -1538,16 +1767,17 @@ function SongRow({ song, onPlay, hideNumber, currentUser, showNotification, show
             )}
           </div>
         )}
-        <div className="song-row-info">
-          <h4>{song.title}</h4>
+        <div className="song-row-info" style={fullTitle ? { minWidth: 0 } : undefined}>
+          <h4 style={fullTitle ? { whiteSpace: 'normal', overflow: 'visible', textOverflow: 'clip', wordBreak: 'break-word', lineHeight: 1.25 } : undefined}>{song.title}</h4>
           <p>{song.artist_name}</p>
         </div>
-        <div className="song-row-duration">
+        <div className="song-row-duration" style={fullTitle ? { whiteSpace: 'nowrap', textAlign: 'right' } : undefined}>
           {formatDuration(song.duration)}
         </div>
-        <div className="song-row-actions">
+        <div className="song-row-actions" style={fullTitle ? { justifyContent: 'flex-end', display: 'flex', gap: '0.5rem' } : undefined}>
           <LikeButton 
-            songId={song.song_id}
+            song={song}
+            songId={getSongId(song)}
             currentUser={currentUser}
             showNotification={showNotification}
             onUpdate={onUpdate}
@@ -1587,7 +1817,7 @@ function SongRow({ song, onPlay, hideNumber, currentUser, showNotification, show
 
       {showAddToPlaylist && (
         <AddToPlaylistModal
-          songId={song.song_id}
+          songId={getSongId(song)}
           currentUser={currentUser}
           onClose={() => setShowAddToPlaylist(false)}
           showNotification={showNotification}
@@ -1597,119 +1827,164 @@ function SongRow({ song, onPlay, hideNumber, currentUser, showNotification, show
   );
 }
 
-function LikeButton({ songId, currentUser, showNotification, onUpdate }) {
-  const [isLiked, setIsLiked] = useState(false);
-  const [checking, setChecking] = useState(true);
+function LikeButton({ song, songId, currentUser, showNotification = () => {}, onUpdate }) {
+  const [isLiked, setIsLiked] = useState(() => isSongLikedInCache(songId));
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (currentUser) {
-      checkLikeStatus();
-    } else {
-      setChecking(false);
-    }
+    setIsLiked(currentUser ? isSongLikedInCache(songId) : false);
+
+    const handleFavoritesUpdated = (event) => {
+      if (event.detail?.songId != null && String(event.detail.songId) === String(songId)) {
+        setIsLiked(Boolean(event.detail.liked));
+        return;
+      }
+      setIsLiked(currentUser ? isSongLikedInCache(songId) : false);
+    };
+
+    window.addEventListener('favorites-updated', handleFavoritesUpdated);
+    return () => window.removeEventListener('favorites-updated', handleFavoritesUpdated);
   }, [songId, currentUser]);
 
-  const checkLikeStatus = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      setChecking(false);
-      return;
-    }
-
-    try {
-      const response = await fetch(
-        `/api/favorites/${currentUser.userId}`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
-      );
-      const favorites = await response.json();
-      setIsLiked(favorites.some(f => f.song_id === songId));
-      setChecking(false);
-    } catch (error) {
-      console.error('Error checking like status:', error);
-      setChecking(false);
-    }
+  const updateLocalLike = (liked) => {
+    setCachedSongLike(songId, liked);
+    if (song) setCachedLikedSong(song, liked);
+    setIsLiked(liked);
+    window.dispatchEvent(new CustomEvent('favorites-updated', {
+      detail: { songId, liked, song }
+    }));
   };
 
   const toggleLike = async (e) => {
     e.stopPropagation();
-    
+    e.preventDefault();
+
+    if (!songId || saving) return;
+
     if (!currentUser) {
       showNotification('Please sign in to like songs', 'error');
       return;
     }
 
-    const token = localStorage.getItem('token');
-    
+    const token = getAuthToken();
+    if (!token) {
+      showNotification('Please sign in again', 'error');
+      return;
+    }
+
+    const previousState = isLiked;
+    const nextState = !isLiked;
+
+    updateLocalLike(nextState);
+    setSaving(true);
+
     try {
-      if (isLiked) {
-        await fetch(`/api/favorites/${songId}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        setIsLiked(false);
-        showNotification('Removed from liked songs');
-      } else {
-        await fetch('/api/favorites', {
-          method: 'POST',
+      const response = await fetch(
+        nextState
+          ? '/api/favorites'
+          : `/api/favorites/${encodeURIComponent(songId)}`,
+        {
+          method: nextState ? 'POST' : 'DELETE',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
+            Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ songId })
-        });
-        setIsLiked(true);
-        showNotification('Added to liked songs!');
+          body: nextState ? JSON.stringify({ songId, song_id: songId }) : undefined,
+        }
+      );
+
+      if (!response.ok) {
+        let message = 'Action failed';
+        try {
+          const errorData = await response.json();
+          message = errorData.error || errorData.message || message;
+        } catch (_) {}
+        throw new Error(message);
       }
-      if (onUpdate) onUpdate();
+
+      if (onUpdate) await onUpdate();
     } catch (error) {
-      console.error('Error toggling like:', error);
-      showNotification('Action failed', 'error');
+      console.error('Error syncing like:', error);
+
+      if (isAuthErrorMessage(error.message)) {
+        updateLocalLike(previousState);
+        expireAuthSession();
+        return;
+      }
+
+      // Rate limits or temporary backend issues should not erase the user's local like.
+      // The UI keeps the choice locally and avoids spamming error notifications.
+    } finally {
+      setSaving(false);
     }
   };
 
-  if (checking) return null;
-
   return (
-    <button 
+    <button
       className={`icon-btn like-btn ${isLiked ? 'liked' : ''}`}
       onClick={toggleLike}
       title={isLiked ? 'Unlike' : 'Like'}
+      aria-pressed={isLiked}
+      style={{ color: isLiked ? '#ff3b5c' : undefined, cursor: 'pointer' }}
     >
-      <svg viewBox="0 0 24 24" fill={isLiked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
-        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+      <svg
+        viewBox="0 0 24 24"
+        fill={isLiked ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth="2"
+      >
+        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
       </svg>
     </button>
   );
 }
-
 function AddToPlaylistModal({ songId, currentUser, onClose, showNotification }) {
-  const [playlists, setPlaylists] = useState([]);
+  const [playlists, setPlaylists] = useState(() => readCachedList('pulse-cache-user-playlists'));
   const [loading, setLoading] = useState(true);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [newPlaylistTitle, setNewPlaylistTitle] = useState('');
+  const [newPlaylistDescription, setNewPlaylistDescription] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     fetchPlaylists();
   }, []);
 
+  const getCreatedPlaylistId = (data) => {
+    return data?.playlist_id ?? data?.playlistId ?? data?.id ?? data?.playlist?.playlist_id ?? data?.playlist?.id;
+  };
+
   const fetchPlaylists = async () => {
-    const token = localStorage.getItem('token');
-    
+    const token = getAuthToken();
+    if (!token || !currentUser?.userId) {
+      setPlaylists(readCachedList('pulse-cache-user-playlists'));
+      setLoading(false);
+      return;
+    }
+
     try {
+      setLoading(true);
       const response = await fetch(
         `/api/playlists/user/${currentUser.userId}`,
         { headers: { 'Authorization': `Bearer ${token}` } }
       );
       const data = await response.json();
-      setPlaylists(data);
-      setLoading(false);
+      setPlaylists(response.ok ? useLastGoodList(normalizePlaylists(data), 'pulse-cache-user-playlists') : readCachedList('pulse-cache-user-playlists'));
     } catch (error) {
       console.error('Error fetching playlists:', error);
+      setPlaylists(readCachedList('pulse-cache-user-playlists'));
+    } finally {
       setLoading(false);
     }
   };
 
   const addToPlaylist = async (playlistId) => {
-    const token = localStorage.getItem('token');
-    
+    const token = getAuthToken();
+    if (!token) {
+      showNotification('Please sign in again', 'error');
+      return false;
+    }
+
     try {
       const response = await fetch(
         `/api/playlists/${playlistId}/songs`,
@@ -1719,28 +1994,78 @@ function AddToPlaylistModal({ songId, currentUser, onClose, showNotification }) 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({ songId })
+          body: JSON.stringify({ songId, song_id: songId })
         }
       );
 
       if (response.ok) {
         showNotification('Added to playlist!');
         onClose();
-      } else {
-        const error = await response.json();
-        showNotification(error.error || 'Failed to add song', 'error');
+        return true;
       }
+
+      const error = await response.json().catch(() => ({}));
+      showNotification(error.error || error.message || 'Failed to add song', 'error');
+      return false;
     } catch (error) {
       console.error('Error adding to playlist:', error);
       showNotification('Failed to add song', 'error');
+      return false;
     }
   };
 
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-small" onClick={(e) => e.stopPropagation()}>
+  const createPlaylistAndAddSong = async (e) => {
+    e.preventDefault();
+    const title = newPlaylistTitle.trim();
+    if (!title || saving) return;
+
+    const token = getAuthToken();
+    if (!token) {
+      showNotification('Please sign in again', 'error');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const response = await fetch('/api/playlists', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ title, description: newPlaylistDescription, isPublic: true })
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        showNotification(data.error || data.message || 'Failed to create playlist', 'error');
+        return;
+      }
+
+      const createdPlaylistId = getCreatedPlaylistId(data);
+      if (!createdPlaylistId) {
+        await fetchPlaylists();
+        showNotification('Playlist created. Select it to add this song.');
+        setShowCreateForm(false);
+        setNewPlaylistTitle('');
+        setNewPlaylistDescription('');
+        return;
+      }
+
+      await addToPlaylist(createdPlaylistId);
+    } catch (error) {
+      console.error('Error creating playlist:', error);
+      showNotification('Failed to create playlist', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return createPortal(
+    <div className="modal-overlay" onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', overflowY: 'auto', background: 'rgba(3, 8, 18, 0.82)', backdropFilter: 'blur(10px)' }}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '620px', width: 'min(92vw, 620px)', maxHeight: 'min(88vh, 720px)', overflow: 'hidden', display: 'flex', flexDirection: 'column', margin: 'auto' }}>
         <div className="modal-header">
-          <h2>Add to Playlist</h2>
+          <h2>{showCreateForm ? 'Create Playlist' : 'Add to Playlist'}</h2>
           <button className="modal-close" onClick={onClose}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18"/>
@@ -1749,36 +2074,96 @@ function AddToPlaylistModal({ songId, currentUser, onClose, showNotification }) 
           </button>
         </div>
 
-        <div className="playlist-select-list">
-          {loading ? (
-            <div className="loading-state">
-              <div className="spinner"></div>
-              <p>Loading playlists...</p>
+        {showCreateForm ? (
+          <form onSubmit={createPlaylistAndAddSong} className="modal-form" style={{ overflowY: 'auto', paddingRight: '0.25rem' }}>
+            <div className="form-group">
+              <label>Playlist Name</label>
+              <input
+                type="text"
+                value={newPlaylistTitle}
+                onChange={(e) => setNewPlaylistTitle(e.target.value)}
+                placeholder="Enter playlist name"
+                className="form-input"
+                autoFocus
+              />
             </div>
-          ) : playlists.length > 0 ? (
-            playlists.map(playlist => (
-              <button
-                key={playlist.playlist_id}
-                className="playlist-select-item"
-                onClick={() => addToPlaylist(playlist.playlist_id)}
-              >
-                <div className="playlist-select-icon">{playlist.title.charAt(0)}</div>
-                <div className="playlist-select-info">
-                  <div className="playlist-select-title">{playlist.title}</div>
-                  <div className="playlist-select-count">{playlist.total_tracks} songs</div>
-                </div>
+
+            <div className="form-group">
+              <label>Description (Optional)</label>
+              <textarea
+                value={newPlaylistDescription}
+                onChange={(e) => setNewPlaylistDescription(e.target.value)}
+                placeholder="Add a description"
+                className="form-textarea"
+                rows="3"
+              />
+            </div>
+
+            <div className="modal-actions" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', paddingTop: '1rem' }}>
+              <button type="button" className="btn-secondary" onClick={() => setShowCreateForm(false)} style={{ minWidth: '150px', whiteSpace: 'nowrap' }}>
+                Back to Playlists
               </button>
-            ))
-          ) : (
-            <div className="empty-state-small">
-              <p>No playlists yet</p>
-              <p className="empty-subtitle">Create a playlist first</p>
+              <button type="button" className="btn-secondary" onClick={onClose} style={{ minWidth: '110px', whiteSpace: 'nowrap' }}>
+                Cancel
+              </button>
+              <button type="submit" className="btn-primary" disabled={!newPlaylistTitle.trim() || saving} style={{ minWidth: '150px', whiteSpace: 'nowrap' }}>
+                {saving ? 'Creating...' : 'Create & Add'}
+              </button>
             </div>
-          )}
-        </div>
+          </form>
+        ) : (
+          <div className="playlist-select-list" style={{ display: 'grid', gap: '0.75rem', maxHeight: 'min(58vh, 420px)', overflowY: 'auto', paddingRight: '0.25rem' }}>
+            {loading ? (
+              <div className="loading-state">
+                <div className="spinner"></div>
+                <p>Loading playlists...</p>
+              </div>
+            ) : playlists.length > 0 ? (
+              <>
+                <button className="btn-create-playlist" onClick={() => setShowCreateForm(true)} style={{ justifyContent: 'center', marginBottom: '0.25rem' }}>
+                  <svg className="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="12" y1="5" x2="12" y2="19"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                  </svg>
+                  Create a New Playlist
+                </button>
+                {playlists.map(playlist => (
+                  <button
+                    key={playlist.playlist_id ?? playlist.id}
+                    className="playlist-select-item"
+                    onClick={() => addToPlaylist(playlist.playlist_id ?? playlist.id)}
+                    title={playlist.title}
+                    style={{ alignItems: 'flex-start', minHeight: '76px', textAlign: 'left', width: '100%' }}
+                  >
+                    <div className="playlist-select-icon">{(playlist.title || 'P').charAt(0)}</div>
+                    <div className="playlist-select-info" style={{ minWidth: 0, flex: 1 }}>
+                      <div className="playlist-select-title" style={{ whiteSpace: 'normal', overflow: 'visible', textOverflow: 'clip', wordBreak: 'break-word', lineHeight: 1.25 }}>
+                        {playlist.title || 'Untitled Playlist'}
+                      </div>
+                      <div className="playlist-select-count">{playlist.total_tracks ?? playlist.song_count ?? 0} songs</div>
+                    </div>
+                  </button>
+                ))}
+              </>
+            ) : (
+              <div className="empty-state-small" style={{ padding: '1.5rem', textAlign: 'center' }}>
+                <p>No playlist found</p>
+                <p className="empty-subtitle">Create a playlist to add this song.</p>
+                <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap', marginTop: '1rem' }}>
+                  <button className="btn-primary" onClick={() => setShowCreateForm(true)}>
+                    Create a New Playlist
+                  </button>
+                  <button className="btn-secondary" onClick={onClose}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
-  );
+  , document.body);
 }
 
 function GenreCard({ genre, color, onClick }) {
@@ -1962,7 +2347,7 @@ function Player({ song, isPlaying, setIsPlaying, currentUser, onNext, onPrevious
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          songId: song.song_id,
+          songId: getSongId(song),
           duration: currentTime,
           device: 'web'
         })
@@ -2022,9 +2407,11 @@ function Player({ song, isPlaying, setIsPlaying, currentUser, onNext, onPrevious
           </div>
         )}
         <LikeButton
-          songId={song.song_id}
+          song={song}
+          songId={getSongId(song)}
           currentUser={currentUser}
           showNotification={() => {}}
+          onUpdate={() => {}}
         />
       </div>
 
@@ -2295,9 +2682,54 @@ function AuthModal({ onClose, onLogin }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const getAuthErrorMessage = (data, fallback = 'Authentication failed') => {
+    if (data?.code === 'EMAIL_TAKEN') return 'This email is already taken. Try another email.';
+    if (data?.code === 'VALIDATION_ERROR') return data.error || 'Please check the signup fields and try again.';
+    if (data?.code === 'RATE_LIMITED') return 'Too many signup attempts. Please wait a minute and try again.';
+    if (data?.code === 'INVALID_CREDENTIALS') return 'Email or password is incorrect.';
+    return data?.error || data?.message || fallback;
+  };
+
+  const parseAuthResponse = async (response) => {
+    const text = await response.text();
+    if (!text) return {};
+
+    try {
+      return JSON.parse(text);
+    } catch (_) {
+      return {
+        error: response.ok
+          ? 'The server returned an unreadable response. Please try signing in.'
+          : 'The server returned an unreadable error. Make sure the backend is running correctly.',
+      };
+    }
+  };
+
+  const validateSignupForm = () => {
+    if (isLogin) return '';
+    const name = formData.name.trim();
+    const email = formData.email.trim();
+    const password = formData.password;
+
+    if (name.length < 2) return 'Name must be at least 2 characters.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Enter a valid email address.';
+    if (password.length < 8) return 'Password must be at least 8 characters.';
+    if (!/[A-Z]/.test(password)) return 'Password must contain at least one uppercase letter.';
+    if (!/[0-9]/.test(password)) return 'Password must contain at least one digit.';
+    if (!/[^A-Za-z0-9]/.test(password)) return 'Password must contain at least one symbol.';
+    return '';
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    const localError = validateSignupForm();
+    if (localError) {
+      setError(localError);
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -2308,20 +2740,25 @@ function AuthModal({ onClose, onLogin }) {
         body: JSON.stringify(formData)
       });
 
-      const data = await response.json();
+      const data = await parseAuthResponse(response);
 
       if (!response.ok) {
-        throw new Error(data.error || 'Authentication failed');
+        throw new Error(getAuthErrorMessage(data));
       }
 
-      onLogin(data.token, data.user || { 
+      const authToken = data.token || data.accessToken || data.authToken || data.jwt;
+      if (!authToken) {
+        throw new Error('Account created, but login token was missing. Please sign in.');
+      }
+
+      onLogin(authToken, data.user || { 
         userId: data.userId, 
         email: formData.email,
         name: formData.name,
         subscriptionType: 'free'
       });
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Authentication failed. Please try again.');
     }
 
     setLoading(false);
@@ -2353,6 +2790,9 @@ function AuthModal({ onClose, onLogin }) {
                   value={formData.name}
                   onChange={(e) => setFormData({...formData, name: e.target.value})}
                   required={!isLogin}
+                  minLength="2"
+                  maxLength="80"
+                  autoComplete="name"
                   className="form-input"
                 />
               </div>
@@ -2377,6 +2817,8 @@ function AuthModal({ onClose, onLogin }) {
               value={formData.email}
               onChange={(e) => setFormData({...formData, email: e.target.value})}
               required
+              maxLength="255"
+              autoComplete="email"
               className="form-input"
             />
           </div>
@@ -2389,6 +2831,8 @@ function AuthModal({ onClose, onLogin }) {
               value={formData.password}
               onChange={(e) => setFormData({...formData, password: e.target.value})}
               required
+              minLength={isLogin ? undefined : 8}
+              autoComplete={isLogin ? 'current-password' : 'new-password'}
               className="form-input"
             />
           </div>
@@ -2402,7 +2846,14 @@ function AuthModal({ onClose, onLogin }) {
 
         <div className="auth-switch">
           {isLogin ? "Don't have an account? " : "Already have an account? "}
-          <button onClick={() => setIsLogin(!isLogin)} className="auth-link">
+          <button
+            type="button"
+            onClick={() => {
+              setIsLogin(!isLogin);
+              setError('');
+            }}
+            className="auth-link"
+          >
             {isLogin ? 'Sign Up' : 'Sign In'}
           </button>
         </div>
@@ -2416,7 +2867,7 @@ function AuthModal({ onClose, onLogin }) {
 // ============================================================================
 
 function GenreView({ genre, playSong, currentUser, showNotification, onBack }) {
-  const [songs, setSongs] = useState([]);
+  const [songs, setSongs] = useState(() => readCachedList(`pulse-cache-genre-${genre}`));
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -2424,16 +2875,15 @@ function GenreView({ genre, playSong, currentUser, showNotification, onBack }) {
       try {
         const response = await fetch(`/api/songs?genre=${encodeURIComponent(genre)}&limit=50`);
         const data = await response.json();
-        setSongs(Array.isArray(data.songs) ? data.songs : []);
+        setSongs(useLastGoodList(Array.isArray(data.songs) ? data.songs : normalizeSongList(data), `pulse-cache-genre-${genre}`));
       } catch (error) {
         console.error('Error fetching genre songs:', error);
-        setSongs([]);
+        setSongs(readCachedList(`pulse-cache-genre-${genre}`));
       }
       setLoading(false);
     };
     fetchGenreSongs();
   }, [genre]);
-
   return (
     <div className="genre-view">
       <div style={{ marginBottom: '1.5rem' }}>
@@ -2463,7 +2913,7 @@ function GenreView({ genre, playSong, currentUser, showNotification, onBack }) {
         <div className="songs-list">
           {songs.map((song) => (
             <SongRow
-              key={song.song_id}
+              key={getStableSongKey(song)}
               song={song}
               onPlay={() => playSong(song, songs)}
               currentUser={currentUser}
@@ -2661,6 +3111,25 @@ const SUGGESTIONS = [
   { emoji: '🔥', text: "What's trending right now?" },
 ];
 
+const CHAT_HISTORY_LIMIT = 12;
+const CHAT_TIMEOUT_MS = 15000;
+
+function getChatErrorMessage(error) {
+  if (error?.name === 'AbortError') {
+    return "The assistant took too long to answer. Please try again in a moment.";
+  }
+  const message = error?.message || '';
+  if (/groq_api_key|not configured/i.test(message)) {
+    return "Chat is not configured yet. Add GROQ_API_KEY to backend/.env and restart the backend.";
+  }
+  if (/too many requests|rate limit|429/i.test(message)) {
+    return "The assistant is receiving too many requests right now. Wait a moment, then try again.";
+  }
+  return message && message !== 'Server error'
+    ? message
+    : "Couldn't reach the server. Make sure the backend is running.";
+}
+
 function ChatBot({ playSong, hasPlayer, currentSong }) {
   const [isOpen, setIsOpen] = useState(false);
   // displayMessages drives the UI — includes the static greeting
@@ -2691,7 +3160,7 @@ function ChatBot({ playSong, hasPlayer, currentSong }) {
     const text = (override ?? input).trim();
     if (!text || isLoading) return;
 
-    const newApiHistory = [...apiHistory, { role: 'user', content: text }];
+    const newApiHistory = [...apiHistory, { role: 'user', content: text }].slice(-CHAT_HISTORY_LIMIT);
     setDisplayMessages((prev) => [...prev, { id: msgId.current++, role: 'user', text, songs: [] }]);
     setApiHistory(newApiHistory);
     setInput('');
@@ -2699,9 +3168,12 @@ function ChatBot({ playSong, hasPlayer, currentSong }) {
     setIsLoading(true);
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), CHAT_TIMEOUT_MS);
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           messages: newApiHistory,
           context: currentSong
@@ -2709,20 +3181,20 @@ function ChatBot({ playSong, hasPlayer, currentSong }) {
             : null,
         }),
       });
-      const data = await res.json();
+      clearTimeout(timeoutId);
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Server error');
 
-      const reply = { id: msgId.current++, role: 'assistant', text: data.reply, songs: data.songs || [] };
+      const replyText = data.reply || 'I found a few ideas for you.';
+      const replySongs = normalizeSongList(data.songs).slice(0, 6);
+      const reply = { id: msgId.current++, role: 'assistant', text: replyText, songs: replySongs };
       setDisplayMessages((prev) => [...prev, reply]);
-      setApiHistory((prev) => [...prev, { role: 'assistant', content: data.reply }]);
+      setApiHistory((prev) => [...prev, { role: 'assistant', content: replyText }].slice(-CHAT_HISTORY_LIMIT));
       if (!isOpen) setHasUnread(true);
     } catch (err) {
-      const msg = err?.message && err.message !== 'Server error'
-        ? err.message
-        : "Couldn't reach the server. Make sure the backend is running and ANTHROPIC_API_KEY is set in backend/.env.";
       setDisplayMessages((prev) => [
         ...prev,
-        { id: msgId.current++, role: 'assistant', text: msg, songs: [] },
+        { id: msgId.current++, role: 'assistant', text: getChatErrorMessage(err), songs: [] },
       ]);
     } finally {
       setIsLoading(false);
@@ -2732,6 +3204,9 @@ function ChatBot({ playSong, hasPlayer, currentSong }) {
   const clearChat = () => {
     setDisplayMessages([{ id: msgId.current++, role: 'assistant', text: "Fresh start! What are you in the mood for? 🎵", songs: [] }]);
     setApiHistory([]);
+    setInput('');
+    setHasUnread(false);
+    if (textareaRef.current) { textareaRef.current.style.height = 'auto'; }
   };
 
   const handleKey = (e) => {
@@ -2779,7 +3254,7 @@ function ChatBot({ playSong, hasPlayer, currentSong }) {
                   {msg.songs && msg.songs.length > 0 && (
                     <div className="chatbot-songs">
                       {msg.songs.map((song) => (
-                        <button key={song.song_id} className="chatbot-song-card" onClick={() => { playSong(song); }}>
+                        <button key={getStableSongKey(song)} className="chatbot-song-card" onClick={() => { playSong(song, msg.songs); }}>
                           <div className="chatbot-song-play">▶</div>
                           <div className="chatbot-song-info">
                             <div className="chatbot-song-title">{song.title}</div>
@@ -2880,3 +3355,4 @@ function formatNumber(num) {
 }
 
 export default App;
+

@@ -1,4 +1,4 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { pool } from '../config/db.js';
@@ -34,6 +34,17 @@ function setRefreshCookie(res, token) {
 
 router.post('/register', validate(registerSchema), asyncHandler(async (req, res) => {
   const { name, email, password, country } = req.body;
+
+  const [existingUsers] = await pool.execute(
+    'SELECT user_id FROM users WHERE email = ? LIMIT 1',
+    [email]
+  );
+
+  if (existingUsers.length > 0) {
+    logger.warn({ email }, 'Registration attempt with existing email');
+    throw new AppError('This email is already taken. Try another email.', 409, 'EMAIL_TAKEN');
+  }
+
   const hashedPassword = await bcrypt.hash(password, 12);
 
   try {
@@ -52,14 +63,12 @@ router.post('/register', validate(registerSchema), asyncHandler(async (req, res)
     });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
-      logger.warn({ email }, 'Registration attempt with existing email');
-      // Generic response to avoid email enumeration
-      return res.status(201).json({ message: 'Registration successful. Check your email.' });
+      logger.warn({ email }, 'Registration race with existing email');
+      throw new AppError('This email is already taken. Try another email.', 409, 'EMAIL_TAKEN');
     }
     throw error;
   }
 }));
-
 router.post('/login', validate(loginSchema), asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
@@ -116,3 +125,4 @@ router.post('/logout', asyncHandler(async (req, res) => {
 }));
 
 export default router;
+
